@@ -1,21 +1,116 @@
 import { demographics } from '../js/constant';
 
 /**
- * Calculate population growth rate (lambda)
- * Based on demographic parameters
- * @returns {number} Lambda (population growth rate)
+ * Calculate dominant eigenvalue of a square matrix
+ * Uses power iteration method for computational efficiency
+ * @param {number[][]} matrix - Square matrix
+ * @param {number} maxIterations - Maximum iterations (default 1000)
+ * @param {number} tolerance - Convergence tolerance (default 1e-6)
+ * @returns {number} Dominant eigenvalue
  */
-export const calculateLambda = () => {
-  // Simplified Leslie matrix approach
-  // With 20% breeding, 1 chick/3 years = 0.333 * 0.20 = 0.0667 offspring per capita per year
-  // Annual fecundity considering juvenile survival
-  const annualFecundity = demographics.breedingProportion * 
-                          demographics.chicksPerBreeding * 
-                          demographics.survivalJuvenile;
+const dominantEigenvalue = (matrix, maxIterations = 1000, tolerance = 1e-6) => {
+  const n = matrix.length;
   
-  // Generation-based growth (simplified)
-  // Assuming stable population in wild (lambda ≈ 1.0)
-  return 1.0; // Stable population assumption
+  // Start with random vector
+  let vector = Array(n).fill(0).map(() => Math.random());
+  
+  // Normalize
+  const magnitude = Math.sqrt(vector.reduce((sum, v) => sum + v * v, 0));
+  vector = vector.map(v => v / magnitude);
+  
+  let eigenvalue = 0;
+  let prevEigenvalue = 0;
+  
+  for (let iter = 0; iter < maxIterations; iter++) {
+    // Multiply matrix by vector
+    const newVector = matrix.map(row => 
+      row.reduce((sum, val, i) => sum + val * vector[i], 0)
+    );
+    
+    // Calculate eigenvalue (Rayleigh quotient)
+    eigenvalue = newVector.reduce((sum, v, i) => sum + v * vector[i], 0) /
+                 vector.reduce((sum, v) => sum + v * v, 0);
+    
+    // Normalize new vector
+    const newMagnitude = Math.sqrt(newVector.reduce((sum, v) => sum + v * v, 0));
+    vector = newVector.map(v => v / newMagnitude);
+    
+    // Check convergence
+    if (Math.abs(eigenvalue - prevEigenvalue) < tolerance) {
+      break;
+    }
+    
+    prevEigenvalue = eigenvalue;
+  }
+  
+  return eigenvalue;
+};
+
+/**
+ * Build Leslie matrix from age-structured demographic parameters
+ * Leslie matrix structure:
+ *   [f1  f2  f3]   First row: fecundities
+ *   [s1  0   0 ]   Subdiagonal: survival rates
+ *   [0   s2  s3]   All other entries: 0
+ * @returns {number[][]} Leslie matrix
+ */
+const buildLeslieMatrix = () => {
+  const ages = demographics.ageClasses;
+  const n = ages.length;
+  
+  // Initialize matrix with zeros
+  const matrix = Array(n).fill(0).map(() => Array(n).fill(0));
+  
+  // First row: fecundities (births per individual in each age class)
+  ages.forEach((ageClass, i) => {
+    matrix[0][i] = ageClass.fecundity;
+  });
+  
+  // Subdiagonal: survival rates (probability of surviving to next age class)
+  for (let i = 0; i < n - 1; i++) {
+    matrix[i + 1][i] = ages[i].survival;
+  }
+  
+  // Last diagonal: adult survival (staying in adult class)
+  matrix[n - 1][n - 1] = ages[n - 1].survival;
+  
+  return matrix;
+};
+
+/**
+ * Calculate population growth rate (lambda) using Leslie matrix eigenvalue analysis
+ * This is the PROPER demographic method for age-structured populations
+ * 
+ * λ > 1: Population growing
+ * λ = 1: Population stable
+ * λ < 1: Population declining
+ * 
+ * @param {boolean} useLeslieMatrix - If true, calculate from Leslie matrix. If false, assume λ=1.0
+ * @returns {number} Lambda (population growth rate per generation)
+ */
+export const calculateLambda = (useLeslieMatrix = false) => {
+  if (!useLeslieMatrix) {
+    // Simple assumption: stable population (lambda = 1.0)
+    // Rationale: Simplifies genetic drift analysis by removing demographic confounds
+    return 1.0;
+  }
+  
+  // Build age-structured Leslie matrix
+  const leslieMatrix = buildLeslieMatrix();
+  
+  // The dominant eigenvalue of the Leslie matrix is the population growth rate
+  // This is the mathematically correct way to calculate λ for age-structured populations
+  const annualLambda = dominantEigenvalue(leslieMatrix);
+  
+  // Convert annual λ to generation-based λ
+  // λ_generation = (λ_annual)^generation_time
+  const generationLambda = Math.pow(annualLambda, demographics.generationTime);
+  
+  // Sanity check: clamp to biologically reasonable range
+  // Long-lived birds rarely have |λ - 1| > 0.2 per generation
+  const clampedLambda = Math.max(0.80, Math.min(1.20, generationLambda));
+  
+  return clampedLambda;
 };
 
 /**

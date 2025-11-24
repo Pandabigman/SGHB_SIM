@@ -53,7 +53,15 @@ export const demographics = {
   groupSize: 5.5, // Average 3-9, median ~5.5
   survivalAdult: 0.92, // Assumed from literature (high adult survival)
   survivalJuvenile: 0.65, // Assumed (lower juvenile survival)
-  survivalSubadult: 0.85 // Assumed intermediate
+  survivalSubadult: 0.85, // Assumed intermediate
+  
+  // Age class structure for Leslie matrix
+  ageClasses: [
+    { name: 'Juvenile', minAge: 0, maxAge: 4, survival: 0.65, fecundity: 0 },
+    { name: 'Subadult', minAge: 5, maxAge: 9, survival: 0.85, fecundity: 0 },
+    { name: 'Adult', minAge: 10, maxAge: 40, survival: 0.92, fecundity: 0.0667 }
+    // Adult fecundity: 20% breed × (1 chick/3 years) = 0.20 × 0.333 = 0.0667
+  ]
 };
 
 // Model colors for visualization

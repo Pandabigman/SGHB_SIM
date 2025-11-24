@@ -9,7 +9,7 @@ import {
   getModelName 
 } from '../js/constant';
 import {
- calculateLambda,
+  calculateLambda,
   calculateGeneticDiversity,
   calculateInbreeding,
   calculateAlleles,
@@ -25,6 +25,7 @@ const Sim = () => {
   const [results, setResults] = useState(null);
   const [activeTab, setActiveTab] = useState('overview');
   const [stochastic, setStochastic] = useState(false);
+  const [useLeslieMatrix, setUseLeslieMatrix] = useState(false);
 
   const runSimulation = () => {
     setIsSimulating(true);
@@ -126,6 +127,12 @@ const Sim = () => {
       combinedData.push(dataPoint);
     }
     
+    // Debug: Log first data point to check all models are present
+    if (combinedData.length > 0) {
+      console.log('Chart data sample:', combinedData[0]);
+      console.log('Models in results:', results.map(r => r.modelNumber));
+    }
+    
     return combinedData;
   };
 
@@ -139,9 +146,7 @@ const Sim = () => {
         {/* Header */}
         <div style={styles.card}>
           <div style={styles.flexStart}>
-            <div>
-                <img src='./images.jpeg'/>
-            </div>
+            <div> <img src='./images.jpeg'/></div>
             <div style={styles.flex1}>
               <h1 style={styles.title}>
                 Southern Ground Hornbill Population Genetics Simulator
@@ -202,7 +207,7 @@ const Sim = () => {
             </div>
           </div>
           
-          <div style={{marginTop: '1rem'}}>
+          <div style={{marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.75rem'}}>
             <label style={{...styles.label, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
               <input
                 type="checkbox"
@@ -214,6 +219,24 @@ const Sim = () => {
                 Enable Stochastic Simulation 
                 <span style={{fontSize: '0.75rem', color: '#6b7280', marginLeft: '0.5rem'}}>
                   (adds random variation - each run will be different)
+                </span>
+              </span>
+            </label>
+            
+            <label style={{...styles.label, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer'}}>
+              <input
+                type="checkbox"
+                checked={useLeslieMatrix}
+                onChange={(e) => setUseLeslieMatrix(e.target.checked)}
+                style={{width: '1rem', height: '1rem', cursor: 'pointer'}}
+              />
+              <span>
+                Use Leslie Matrix (Age-Structured Model)
+                <span style={{fontSize: '0.75rem', color: useLeslieMatrix ? '#15803d' : '#6b7280', marginLeft: '0.5rem', fontWeight: useLeslieMatrix ? '600' : 'normal'}}>
+                  {useLeslieMatrix 
+                    ? `(λ = ${calculateLambda(true).toFixed(4)} per generation - population ${calculateLambda(true) > 1 ? 'growing' : calculateLambda(true) < 1 ? 'declining' : 'stable'})`
+                    : '(proper demographic calculation via eigenvalue analysis)'
+                  }
                 </span>
               </span>
             </label>
@@ -288,13 +311,21 @@ const Sim = () => {
                   <div style={styles.gridCols4}>
                     {results.map(model => {
                       const finalGen = model.data[model.data.length - 1];
+                      const initialGen = model.data[0];
+                      const change = ((parseFloat(finalGen.Ho) - parseFloat(initialGen.Ho)) / parseFloat(initialGen.Ho) * 100).toFixed(1);
+                      
                       return (
                         <div key={model.modelNumber} style={styles.statCard}>
                           <div style={styles.statLabel}>Model {model.modelNumber}</div>
                           <div style={{...styles.statValue, color: modelColors[`model${model.modelNumber}`]}}>
                             {finalGen.Ho}
                           </div>
-                          <div style={styles.statDesc}>Final Ho at Gen {generations}</div>
+                          <div style={styles.statDesc}>
+                            Final Ho at Gen {generations}
+                            <div style={{fontSize: '0.65rem', marginTop: '0.25rem'}}>
+                              ({change}% change)
+                            </div>
+                          </div>
                         </div>
                       );
                     })}
@@ -326,6 +357,12 @@ const Sim = () => {
                     {activeTab === 'alleles' && 'Mean Number of Alleles (Na) Over Time'}
                     {activeTab === 'population' && 'Population Size Projection'}
                   </h3>
+                  
+                  {/* Debug info */}
+                  <div style={{fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.5rem'}}>
+                    Showing {results.length} models: {results.map(r => `Model ${r.modelNumber}`).join(', ')}
+                  </div>
+                  
                   <ResponsiveContainer width="100%" height={400}>
                     <LineChart data={prepareChartData(
                       activeTab === 'heterozygosity' ? 'Ho' :
@@ -355,8 +392,9 @@ const Sim = () => {
                           dataKey={`model${num}`}
                           stroke={modelColors[`model${num}`]}
                           name={`Model ${num}`}
-                          strokeWidth={2}
+                          strokeWidth={num === 3 ? 3 : 2}
                           dot={false}
+                          connectNulls={true}
                         />
                       ))}
                     </LineChart>
@@ -385,12 +423,15 @@ const Sim = () => {
                 </div>
                 
                 <div>
-                  <h3 style={styles.assumptionTitle}>Demographic Parameters:</h3>
+                  <h3 style={styles.assumptionTitle}>Demographic Parameters (Leslie Matrix):</h3>
                   <ul style={styles.assumptionList}>
-                    <li>Generation time: 15 years (based on breeding age of 10 years)</li>
-                    <li>Breeding proportion: 20% (cooperative breeding system)</li>
-                    <li>Fecundity: 1 chick every 3 years per breeding pair</li>
-                    <li>Population growth: λ = 1.0 (stable, based on long-lived species dynamics)</li>
+                    <li><strong>Age Class Structure:</strong></li>
+                    <li style={{marginLeft: '1rem'}}>• Juveniles (0-4 yrs): Survival 65%, No breeding</li>
+                    <li style={{marginLeft: '1rem'}}>• Subadults (5-9 yrs): Survival 85%, No breeding (helpers)</li>
+                    <li style={{marginLeft: '1rem'}}>• Adults (10+ yrs): Survival 92%, Fecundity 0.0667 (20% breed, 1 chick/3 yrs)</li>
+                    <li><strong>Growth Rate:</strong> Default λ = 1.0 (stable assumption)</li>
+                    <li><strong>Leslie Matrix:</strong> When enabled, λ calculated from eigenvalue ≈ {calculateLambda(true).toFixed(3)}</li>
+                    <li><strong>Method:</strong> Dominant eigenvalue via power iteration (proper demographic analysis)</li>
                   </ul>
                 </div>
                 
