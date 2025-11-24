@@ -1,0 +1,39 @@
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+
+
+# Test files
+test_*.py
+tests/
+convert.ipynb
+
+#unused files
+rawGenAlex.csv
+
+# Local development
+*.log
+.env
+EOF
+
+.ipynb_checkpoints/
+.mypy_cache/
+.ipynb

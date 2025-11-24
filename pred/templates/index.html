@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Southern Ground Hornbill Population Genetics Simulator</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div><img src="{{ url_for('static', filename='images/gshb.jpeg') }}"/></div>
+            <div>
+            <h1>Southern Ground Hornbill Population Genetics Simulator</h1>
+            <p class="subtitle">Predictive modeling of genetic diversity and population viability</p>
+            <div class="info-box">
+                Based on microsatellite data from 199 wild and 145 captive individuals
+            </div>
+        </div>
+        </div>
+        
+        <!-- Model Selector -->
+        <div class="model-selector">
+            <h2>Select Conservation Scenario</h2>
+            <div class="model-tabs">
+                <button class="model-tab active" data-model="1">Model 1</button>
+                <button class="model-tab" data-model="2">Model 2</button>
+                <button class="model-tab" data-model="3">Model 3</button>
+                <button class="model-tab" data-model="4">Model 4</button>
+                <button class="model-tab" data-model="5">Model 5</button>
+            </div>
+            <div class="model-description" id="model-description">
+                Baseline scenario with all wild populations (Eastern Cape, Kruger NP, KwaZulu-Natal, Limpopo)
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="controls">
+            <h2>Simulation Parameters</h2>
+            
+            <div class="control-group">
+                <label for="ne-slider">
+                    Effective Population Size (Ne): 
+                    <span class="value-display" id="ne-value">100</span>
+                </label>
+                <input type="range" id="ne-slider" min="20" max="200" value="100" step="1">
+                <div class="slider-labels">
+                    <span>20</span>
+                    <span>100</span>
+                    <span>200</span>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <label for="gen-slider">
+                    Generations to Simulate: 
+                    <span class="value-display" id="gen-value">50</span>
+                    <span class="value-unit" id="gen-unit">(750 years)</span>
+                </label>
+                <input type="range" id="gen-slider" min="10" max="100" value="50" step="10">
+                <div class="slider-labels">
+                    <span>10 (150 yrs)</span>
+                    <span>50 (750 yrs)</span>
+                    <span>100 (1500 yrs)</span>
+                </div>
+            </div>
+            
+            <button id="run-btn">Run Simulation</button>
+        </div>
+        
+        <!-- Loading State -->
+        <div id="loading" class="loading hidden">
+            Running simulation
+        </div>
+        
+        <!-- Error Display -->
+        <div id="error" class="error hidden"></div>
+        
+        <!-- Results -->
+        <div id="results" class="results hidden">
+            <h2>Simulation Results</h2>
+            
+            <!-- Statistics -->
+            <div class="stats-grid" id="stats-grid">
+                <!-- Stats populated by JavaScript -->
+            </div>
+            
+            <!-- Charts -->
+            <div class="chart-container">
+                <div id="chart-heterozygosity"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div id="chart-inbreeding"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div id="chart-alleles"></div>
+            </div>
+            
+            <div class="chart-container">
+                <div id="chart-population"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Application Logic -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
