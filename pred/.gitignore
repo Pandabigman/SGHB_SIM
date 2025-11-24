@@ -32,8 +32,11 @@ rawGenAlex.csv
 # Local development
 *.log
 .env
-EOF
 
 .ipynb_checkpoints/
 .mypy_cache/
 .ipynb
+
+# Vercel
+.vercel
+.vercel_build_output/
