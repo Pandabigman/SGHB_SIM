@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import Sim from './pages/sim'
+import Sim from './pages/Sim'
 
 
 //import './App.css'

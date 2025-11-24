@@ -475,4 +475,11 @@ def get_data_info():
 
 if __name__ == '__main__':
     initialize_genetic_data()
-    app.run(debug=True, port=5000)
+    # For local development only
+    import os
+
+    if os.environ.get("GAE_ENV", "").startswith("standard"):
+        # Production on GAE - Gunicorn will handle this
+        pass
+    else:
+        app.run(debug=True, port=5000)
