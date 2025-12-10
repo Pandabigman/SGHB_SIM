@@ -33,6 +33,12 @@ body {
     padding: 20px;
 }
 
+.header img {
+    max-width: 250px;
+    height: auto;
+    border-radius: 8px;
+}
+
 h1 {
     color: #1f2937;
     font-size: 2rem;
