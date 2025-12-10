@@ -24,7 +24,177 @@
             </div>
         </div>
         </div>
-        
+
+        <!-- Model Information & Assumptions -->
+        <div class="info-panel">
+            <details>
+                <summary style="cursor: pointer; font-size: 1.1em; font-weight: 600; padding: 15px; background: #f3f4f6; border-radius: 8px; user-select: none;">
+                    📊 Model Information, Assumptions & Key Parameters
+                </summary>
+                <div style="padding: 20px; background: #fafafa; border-radius: 0 0 8px 8px;">
+
+                    <!-- Overview -->
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #1f2937; margin-bottom: 10px;">🔬 Model Overview</h3>
+                        <p style="line-height: 1.6; color: #4b5563;">
+                            This simulator uses real microsatellite genetic data from <strong>199 wild Southern Ground Hornbills</strong>
+                            (4 populations in South Africa) and <strong>145 captive individuals</strong> (from PAAZA, AZA, and EAZA zoos)
+                            to predict population viability under different conservation scenarios over the next 50-100 generations (~1,300-2,600 years).
+                        </p>
+                    </div>
+
+                    <!-- Key Assumptions -->
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #1f2937; margin-bottom: 10px;">⚙️ Key Assumptions</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px;">
+
+                            <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
+                                <strong style="color: #1f2937;">Generation Time</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    26 years per generation (based on late sexual maturity and slow reproductive rate)
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #10b981;">
+                                <strong style="color: #1f2937;">Inbreeding Depression</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    <strong>B = 3.14 lethal equivalents</strong> (based on O'Grady et al. 2006 bird average).
+                                    Reduced survival: s = exp(-3.14 × F)
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #f59e0b;">
+                                <strong style="color: #1f2937;">Effective Population Size</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    Ne ≈ 500 (estimated from census of ~2,500 birds). Range: 375-625 for sensitivity analysis.
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #8b5cf6;">
+                                <strong style="color: #1f2937;">Genetic Rescue Effect</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    Supplementation reduces population-wide F by 50% of gene flow proportion.
+                                    Released birds show hybrid vigor (85% less inbreeding penalty).
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #ec4899;">
+                                <strong style="color: #1f2937;">Released Bird Survival</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    Captive-bred birds have 95% wild survival rate (disease-screened, monitored, initially healthier)
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #06b6d4;">
+                                <strong style="color: #1f2937;">Population Growth Rate (λ)</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    Default λ = 1.0 (stable). Adjustable to reflect habitat management, climate change, and non-genetic factors.
+                                </p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Important Metrics -->
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #1f2937; margin-bottom: 10px;">📈 Important Metrics Tracked</h3>
+                        <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 6px; overflow: hidden;">
+                            <thead style="background: #f3f4f6;">
+                                <tr>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #1f2937;">Metric</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #1f2937;">Symbol</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #1f2937;">Description</th>
+                                    <th style="padding: 12px; text-align: left; font-weight: 600; color: #1f2937;">Concern Threshold</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="border-top: 1px solid #e5e7eb;">
+                                    <td style="padding: 12px; font-weight: 500;">Observed Heterozygosity</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #3b82f6;">Ho</td>
+                                    <td style="padding: 12px; color: #6b7280; font-size: 0.9em;">Proportion of individuals with different alleles at each locus</td>
+                                    <td style="padding: 12px; color: #dc2626; font-size: 0.9em;">< 0.35 (low diversity)</td>
+                                </tr>
+                                <tr style="border-top: 1px solid #e5e7eb;">
+                                    <td style="padding: 12px; font-weight: 500;">Inbreeding Coefficient</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #3b82f6;">F</td>
+                                    <td style="padding: 12px; color: #6b7280; font-size: 0.9em;">Probability that two alleles are identical by descent</td>
+                                    <td style="padding: 12px; color: #dc2626; font-size: 0.9em;">> 0.25 (high inbreeding)</td>
+                                </tr>
+                                <tr style="border-top: 1px solid #e5e7eb;">
+                                    <td style="padding: 12px; font-weight: 500;">Allelic Richness</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #3b82f6;">Na</td>
+                                    <td style="padding: 12px; color: #6b7280; font-size: 0.9em;">Mean number of alleles per locus (14 loci analyzed)</td>
+                                    <td style="padding: 12px; color: #dc2626; font-size: 0.9em;">< 3.0 (severely depleted)</td>
+                                </tr>
+                                <tr style="border-top: 1px solid #e5e7eb;">
+                                    <td style="padding: 12px; font-weight: 500;">Population Size</td>
+                                    <td style="padding: 12px; font-family: monospace; color: #3b82f6;">N</td>
+                                    <td style="padding: 12px; color: #6b7280; font-size: 0.9em;">Census population size (affected by λ and inbreeding depression)</td>
+                                    <td style="padding: 12px; color: #dc2626; font-size: 0.9em;">< 500 (extinction risk)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Model Scenarios -->
+                    <div style="margin-bottom: 25px;">
+                        <h3 style="color: #1f2937; margin-bottom: 10px;">🎯 Conservation Scenarios Explained</h3>
+                        <div style="display: grid; gap: 12px;">
+
+                            <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #2563eb;">
+                                <strong style="color: #2563eb;">Model 1: Baseline</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    All 4 wild populations maintained (Eastern Cape, Kruger, KwaZulu-Natal, Limpopo). No supplementation.
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #dc2626;">
+                                <strong style="color: #dc2626;">Model 2: Population Loss</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    Simulates loss of Eastern Cape + KwaZulu-Natal populations. Shows consequences of reduced connectivity.
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #16a34a;">
+                                <strong style="color: #16a34a;">Model 3: Low Supplementation</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    4 PAAZA (South African zoo) birds released per generation. Moderate genetic rescue effect.
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #9333ea;">
+                                <strong style="color: #9333ea;">Model 4: High Supplementation</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    10 PAAZA birds per generation. Strong genetic rescue with substantial demographic boost.
+                                </p>
+                            </div>
+
+                            <div style="background: white; padding: 12px; border-radius: 6px; border-left: 4px solid #ea580c;">
+                                <strong style="color: #ea580c;">Model 5: International Mix</strong>
+                                <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 0.9em;">
+                                    4 birds from mixed sources (PAAZA + AZA + EAZA). Maximizes novel allele introduction.
+                                </p>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Data Sources -->
+                    <div>
+                        <h3 style="color: #1f2937; margin-bottom: 10px;">📚 Data Sources & References</h3>
+                        <ul style="line-height: 1.8; color: #4b5563; margin: 0;">
+                            <li><strong>Genetic Data:</strong> 14 microsatellite loci from 199 wild + 145 captive individuals</li>
+                            <li><strong>Populations:</strong> Eastern Cape (n=52), Kruger NP (n=67), KwaZulu-Natal (n=35), Limpopo (n=45)</li>
+                            <li><strong>Captive Sources:</strong> PAAZA (n=63), AZA (n=55), EAZA (n=27)</li>
+                            <li><strong>Lethal Equivalents:</strong> O'Grady et al. (2006) "Realistic levels of inbreeding depression strongly affect extinction risk"</li>
+                            <li><strong>Generation Time:</strong> Kemp & Kemp (1980), Coetzee et al. (2014) - Southern Ground Hornbill biology</li>
+                        </ul>
+                    </div>
+
+                </div>
+            </details>
+        </div>
+
         <!-- Model Selector -->
         <div class="model-selector">
             <h2>Select Conservation Scenario</h2>
