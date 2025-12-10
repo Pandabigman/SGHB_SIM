@@ -2,6 +2,11 @@ from flask import Flask, render_template, request, jsonify
 import numpy as np
 import os
 import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Add parent directory to path to import genetic_data
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,9 +20,12 @@ from genetic_data import (
     LOCI
 )
 
+# Get base directory for path resolution
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 app = Flask(__name__,
-            template_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'templates'),
-            static_folder=os.path.join(os.path.dirname(os.path.dirname(__file__)), 'static'))
+            template_folder=os.path.join(BASE_DIR, 'templates'),
+            static_folder=os.path.join(BASE_DIR, 'static'))
 
 
 # LOAD GENETIC DATA FROM CSVs
