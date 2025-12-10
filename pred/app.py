@@ -1,3 +1,6 @@
+
+### DEPRECATED, USING API/INDEX/PY TO SUPPORT VERCEL 
+
 from flask import Flask, render_template, request, jsonify
 import numpy as np
 import os

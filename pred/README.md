@@ -31,7 +31,13 @@
    - Added expandable info panel in UI with all assumptions and parameters
    - Updated README with model changes and rationale
 
-**Impact:** Conservation scenarios (Models 3-5) now show realistic population stabilization and recovery, while maintaining scientific rigor.
+6. ✅ **Allelic diversity gene flow model (December 2024)**
+   - Fixed conceptual inconsistency in allelic diversity calculation
+   - Supplementation models now correctly show Na can increase (not just decline slower)
+   - Added dynamic Ne tracking for supplementation scenarios
+   - Empirical CSV models track actual novel alleles introduced
+
+**Impact:** Conservation scenarios (Models 3-5) now show realistic population stabilization and recovery, while maintaining scientific rigor. Allelic diversity dynamics now accurately reflect gene flow benefits.
 
 ---
 
@@ -67,11 +73,11 @@ This web application models genetic diversity loss and population decline in Sou
 # Install dependencies
 pip install -r requirements.txt
 
-# Run locally
-python app.py
+# Run locally (do not use app.py)
+python api/index.py
 
 # Open browser
-http://localhost:5000
+http://localhost:5001
 ```
 
 ### Deployment
@@ -233,13 +239,51 @@ def calculate_inbreeding(Ne, t):
     return 1 - np.power(1 - 1/(2*Ne), t)
 ```
 
-**Allelic Diversity Loss:**
+**Allelic Diversity Loss (Drift Only):**
 ```python
 # At = A0 * exp(-t / (4*Ne))
+# NOTE: This formula ONLY models allele loss via genetic drift
+# It does NOT account for gene flow or mutation
 def calculate_allelic_diversity(A0, Ne, t):
     At = A0 * np.exp(-t / (4*Ne))
     return np.maximum(At, 2.0)  # Minimum 2 alleles/locus
 ```
+
+**Allelic Diversity with Gene Flow (NEW!):**
+```python
+def calculate_allelic_diversity_with_geneflow(A0, Ne, t, novel_alleles_per_gen):
+    """
+    Models BOTH drift loss AND gene flow gain
+
+    Component 1: Drift loss of original alleles
+        At_drift = A0 * exp(-t / (4*Ne))
+
+    Component 2: Gene flow gain (cumulative)
+        For each generation g from 1 to t:
+            Alleles added at gen g experience drift for (t-g) generations
+            Retained = novel_alleles_per_gen * exp(-(t-g) / (4*Ne))
+            Total gain = sum of all retained alleles
+
+    Total alleles = At_drift + Total gain
+    """
+    # See api/index.py for full implementation
+```
+
+**Why This Matters:**
+
+1. **Models 1-2 (Baseline)**: Use drift-only formula
+   - Appropriate for closed populations (no immigration)
+   - Na can only decline over time
+
+2. **Models 3-5 (CSV data)**: Use empirical simulation
+   - Tracks actual alleles from real genetic data
+   - Na can increase when novel alleles are added
+   - Proven by CSV data showing captive populations have unique alleles
+
+3. **Models 3-5 (Fallback)**: Use gene flow formula
+   - When CSV data unavailable, estimates novel allele addition
+   - Conservative estimate: 0.15 novel alleles per locus per bird
+   - Na can increase, matching empirical reality
 
 ---
 
@@ -289,6 +333,25 @@ def calculate_population_size_with_inbreeding(N0, lambda_val, F_array, lethal_eq
 - Represents breeding individuals (not census size)
 - Ne/N ratio ≈ 0.15-0.25 for cooperative breeders
 - Lower Ne → Faster genetic loss
+
+**IMPORTANT: Ne Dynamics in Supplementation Models**
+
+Gene flow from supplementation increases the effective population size over time:
+
+- **Models 1-2 (Baseline)**: Ne is constant (no immigration)
+- **Models 3-5**: Ne increases dynamically with gene flow
+  - Formula: `effective_Ne = base_Ne + (cumulative_immigrants × 0.5)`
+  - Each immigrant contributes ~0.5 to effective size (conservative migration model)
+  - Example: Model 3 with base Ne=500, adding 4 birds/gen for 50 gen:
+    - Generation 0: Ne = 500
+    - Generation 25: Ne = 550 (50 birds added)
+    - Generation 50: Ne = 600 (100 birds added)
+
+This dynamic Ne is used in:
+- ✅ Heterozygosity loss calculations
+- ✅ Inbreeding coefficient calculations
+- ✅ Allelic diversity calculations (gene flow model)
+- ✅ Returned in API response as `effective_Ne` array
 
 ### 2. **Generations** [10 - 100]
 - Each generation = **26 years** (Southern Ground Hornbill generation time)

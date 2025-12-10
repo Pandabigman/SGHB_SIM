@@ -295,16 +295,25 @@ def add_individuals_to_population(recipient_df, donor_df, n_individuals):
     return combined
 
 
-def simulate_supplementation_effect(wild_df, captive_df, birds_per_gen, generations, loci_list=LOCI):
+def simulate_supplementation_effect(wild_df, captive_df, birds_per_gen, generations, loci_list=LOCI, base_Ne=500):
     """
     Simulate adding captive birds to wild population over generations
-    Track actual genetic changes
-    
-    Returns: List of genetic metrics per generation
+    Track actual genetic changes INCLUDING effective population size (Ne)
+
+    Args:
+        wild_df: Wild population dataframe
+        captive_df: Captive population dataframe
+        birds_per_gen: Number of birds added per generation
+        generations: Number of generations to simulate
+        loci_list: List of loci to analyze
+        base_Ne: Base effective population size (default 500)
+
+    Returns: List of genetic metrics per generation (includes effective_Ne)
     """
     results = []
     current_population = wild_df.copy()
-    
+    initial_wild_size = len(wild_df)
+
     for gen in range(generations + 1):
         # Calculate current metrics
         Ho = calculate_observed_heterozygosity(current_population, loci_list)
@@ -312,22 +321,28 @@ def simulate_supplementation_effect(wild_df, captive_df, birds_per_gen, generati
         Na = calculate_allelic_richness(current_population, loci_list)
         FIS = calculate_fis(Ho, He)
         pop_size = len(current_population)
-        
+
+        # Calculate effective Ne based on gene flow
+        # Gene flow increases Ne: each immigrant contributes ~0.5 to effective size
+        cumulative_immigrants = birds_per_gen * gen
+        effective_Ne = base_Ne + (cumulative_immigrants * 0.5)
+
         results.append({
             'generation': gen,
             'Ho': Ho,
             'He': He,
             'Na': Na,
             'FIS': FIS,
-            'population_size': pop_size
+            'population_size': pop_size,
+            'effective_Ne': effective_Ne
         })
-        
+
         # Add birds for next generation (except at last generation)
         if gen < generations:
             current_population = add_individuals_to_population(
                 current_population, captive_df, birds_per_gen
             )
-    
+
     return results
 
 
