@@ -146,7 +146,7 @@ const Sim = () => {
         {/* Header */}
         <div style={styles.card}>
           <div style={styles.flexStart}>
-            <div> <img src='https://www.birdlife.org.za/wp-content/uploads/2025/03/Southern-Ground-Hornbill-Cassie-Carstens-600x400.jpg'/></div>
+            <div > <img style={{maxWidth:200}} src='accsghb.jpg'/></div>
             <div style={styles.flex1}>
               <h1 style={styles.title}>
                 Southern Ground Hornbill Population Genetics Simulator
