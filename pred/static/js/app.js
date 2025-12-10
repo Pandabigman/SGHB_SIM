@@ -7,7 +7,7 @@
 
 const state = {
     currentModel: 1,
-    Ne: 100,
+    Ne: 500,
     generations: 50,
     results: null,
     isLoading: false
@@ -49,7 +49,7 @@ function initializeControls() {
     
     genSlider.addEventListener('input', (e) => {
         state.generations = parseInt(e.target.value);
-        const years = state.generations * 15;
+        const years = state.generations * 26;
         genValue.textContent = state.generations;
         genUnit.textContent = `(${years} years)`;
     });

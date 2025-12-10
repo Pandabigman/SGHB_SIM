@@ -77,13 +77,13 @@ def run_model_1(Ne, generations):
         H0 = summary['Ho']
         He0 = summary['He']
         A0 = summary['Na']
-        N0 = summary['sample_size'] * (450 / 199)  # Scale to census
+        N0 = summary['sample_size'] * (2500 / 199)  # Scale to census
     else:
         # Fallback to defaults
         H0 = 0.502
         He0 = 0.568
         A0 = 6.429
-        N0 = 450
+        N0 = 2500
     
     lambda_val = 1.0
     t = np.arange(0, generations + 1)
@@ -92,7 +92,7 @@ def run_model_1(Ne, generations):
         'model_number': 1,
         'model_name': 'Baseline (All Wild Populations)',
         'generations': t.tolist(),
-        'years': (t * 15).tolist(),
+        'years': (t * 26).tolist(),
         'Ho': calculate_heterozygosity_loss(H0, Ne, t).tolist(),
         'He': calculate_heterozygosity_loss(He0, Ne, t).tolist(),
         'F': calculate_inbreeding(Ne, t).tolist(),
@@ -120,7 +120,7 @@ def run_model_2(Ne, generations):
         H0 = summary['Ho']
         He0 = summary['He']
         A0 = summary['Na']
-        N0 = summary['sample_size'] * (450 / 199)
+        N0 = summary['sample_size'] * (2500 / 199)
         
         # Get actual lost alleles
         lost_alleles = GENETIC_DATA['lost_alleles_ec_kzn']
@@ -129,11 +129,11 @@ def run_model_2(Ne, generations):
         H0 = 0.498
         He0 = 0.565
         A0 = 6.1
-        N0 = 398
+        N0 = 2000
         lost_count = 0
-    
+
     # Scale Ne proportionally
-    Ne_scaled = int(Ne * (N0 / 450))
+    Ne_scaled = int(Ne * (N0 / 2500))
     lambda_val = 1.0
     t = np.arange(0, generations + 1)
     
@@ -141,7 +141,7 @@ def run_model_2(Ne, generations):
         'model_number': 2,
         'model_name': 'Population Loss (Kruger + Limpopo Only)',
         'generations': t.tolist(),
-        'years': (t * 15).tolist(),
+        'years': (t * 26).tolist(),
         'Ho': calculate_heterozygosity_loss(H0, Ne_scaled, t).tolist(),
         'He': calculate_heterozygosity_loss(He0, Ne_scaled, t).tolist(),
         'F': calculate_inbreeding(Ne_scaled, t).tolist(),
@@ -186,7 +186,7 @@ def run_model_3(Ne, generations):
         N = [r['population_size'] for r in results]
         
         # Scale population to census size
-        N = [n * (450 / 199) for n in N]
+        N = [n * (2500 / 199) for n in N]
         
         t = np.arange(0, generations + 1)
         
@@ -194,7 +194,7 @@ def run_model_3(Ne, generations):
             'model_number': 3,
             'model_name': 'Low Supplementation (+4 PAAZA/gen)',
             'generations': t.tolist(),
-            'years': (t * 15).tolist(),
+            'years': (t * 26).tolist(),
             'Ho': Ho,
             'He': He,
             'F': F,
@@ -238,7 +238,7 @@ def run_model_4(Ne, generations):
         He = [r['He'] for r in results]
         Na = [r['Na'] for r in results]
         F = [r['FIS'] for r in results]
-        N = [r['population_size'] * (450 / 199) for r in results]
+        N = [r['population_size'] * (2500 / 199) for r in results]
         
         t = np.arange(0, generations + 1)
         
@@ -246,7 +246,7 @@ def run_model_4(Ne, generations):
             'model_number': 4,
             'model_name': 'High Supplementation (+10 PAAZA/gen)',
             'generations': t.tolist(),
-            'years': (t * 15).tolist(),
+            'years': (t * 26).tolist(),
             'Ho': Ho,
             'He': He,
             'F': F,
@@ -294,7 +294,7 @@ def run_model_5(Ne, generations):
         He = [r['He'] for r in results]
         Na = [r['Na'] for r in results]
         F = [r['FIS'] for r in results]
-        N = [r['population_size'] * (450 / 199) for r in results]
+        N = [r['population_size'] * (2500 / 199) for r in results]
         
         t = np.arange(0, generations + 1)
         
@@ -308,7 +308,7 @@ def run_model_5(Ne, generations):
             'model_number': 5,
             'model_name': 'International Mix (+4 Mixed/gen)',
             'generations': t.tolist(),
-            'years': (t * 15).tolist(),
+            'years': (t * 26).tolist(),
             'Ho': Ho,
             'He': He,
             'F': F,
@@ -339,7 +339,7 @@ def run_generic_supplementation_model(Ne, generations, birds_per_gen, model_num,
     H0 = 0.502
     He0 = 0.568
     A0 = 6.429
-    N0 = 450
+    N0 = 2500
     lambda_val = 1.0
     
     t = np.arange(0, generations + 1)
@@ -375,7 +375,7 @@ def run_generic_supplementation_model(Ne, generations, birds_per_gen, model_num,
         'model_number': model_num,
         'model_name': f'Supplementation (+{birds_per_gen} {source}/gen)',
         'generations': t.tolist(),
-        'years': (t * 15).tolist(),
+        'years': (t * 26).tolist(),
         'Ho': Ho_vals,
         'He': He_vals,
         'F': F_vals,
@@ -414,8 +414,8 @@ def simulate():
         model = int(data.get('model', 1))
         
         # Validate inputs
-        if not 20 <= Ne <= 200:
-            return jsonify({'error': 'Ne must be between 20 and 200'}), 400
+        if not 375 <= Ne <= 625:
+            return jsonify({'error': 'Ne must be between 375 and 625'}), 400
         if not 10 <= generations <= 100:
             return jsonify({'error': 'Generations must be between 10 and 100'}), 400
         if not 1 <= model <= 5:
