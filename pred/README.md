@@ -1,303 +1,442 @@
-# Southern Ground Hornbill Population Genetics Simulator
+# Southern Ground Hornbill Population Viability Simulator
 
-Python Flask application with **microsatellite CSV data processing** for accurate genetic modeling.
+**A population genetics and viability analysis tool for Southern Ground Hornbills** using real microsatellite data from 199 wild and 145 captive individuals across South Africa, USA, and Europe.
 
+## Overview
 
+This web application models genetic diversity loss and population decline in Southern Ground Hornbills under different conservation scenarios. It combines **real genetic data** with **inbreeding depression** to provide realistic predictions of population trajectories over 10-100 generations (260-2600 years).
 
-### ✅ **All 5 Models Complete!**
-1. ✅ Model 1: Baseline (all populations)
-2. ✅ Model 2: Population loss (shows actual alleles lost)
-3. ✅ Model 3: +4 PAAZA birds/gen (real genetic rescue)
-4. ✅ Model 4: +10 PAAZA birds/gen (stronger rescue)
-5. ✅ Model 5: +4 mixed birds/gen (maximum diversity)
+### Key Features
 
-### ✅ **CSV Data Processing**
-- Parses actual microsatellite genotypes
-- Calculates Ho, He, Na from raw alleles
-- Tracks specific alleles gained/lost
-- Models realistic supplementation effects
+- ✅ **Real microsatellite data** (14 loci from 344 birds)
+- ✅ **Inbreeding depression** (B = 6.29 lethal equivalents, O'Grady et al. 2006)
+- ✅ **User-adjustable population growth rate** (λ = 0.5-1.5) to model habitat loss/recovery
+- ✅ **5 conservation scenarios** comparing no intervention, population loss, and genetic rescue
+- ✅ **Demographic-genetic coupling** (inbreeding affects population size)
+- ✅ **Cohort tracking** for released captive birds (separate mortality rates)
+- ✅ **Interactive visualization** with Plotly.js charts
 
 ---
 
+## Installation
 
+### Requirements
+- Python 3.8+
+- Flask 3.1.2
+- NumPy 2.3.5
+- Pandas 2.3.3
 
-## Installation and Start
+### Quick Start
 
-### 1. Install & Run
 ```bash
 # Install dependencies
 pip install -r requirements.txt
 
-# Run application
+# Run locally
 python app.py
+
+# Open browser
+http://localhost:5000
 ```
 
-### 2. Open Browser
-Navigate to: `http://localhost:5000`
+### Deployment
+Configured for Vercel serverless deployment via `vercel.json`.
 
 ---
 
+## The 5 Conservation Scenarios
 
-## 🎯 What Each Model Does
+### **Model 1: Baseline (All Wild Populations)**
+**What it does:** Simulates genetic drift and inbreeding in all 4 wild populations (Eastern Cape, Kruger NP, KwaZulu-Natal, Limpopo) with no intervention.
 
-### **Model 1: Baseline** ✅
+**Genetic metrics:** Calculated from 199 wild birds
+- Initial Ho (observed heterozygosity): 0.502
+- Initial He (expected heterozygosity): 0.568
+- Initial Na (allelic richness): 6.429 alleles/locus
 
- Calculates real Ho from 199 genotypes
-
+**Population dynamics:**
 ```python
-# Calculates from actual data
-Ho = count_heterozygotes / total_individuals
-He = 1 - sum(allele_freq²)
-Na = mean_unique_alleles_per_locus
+# Inbreeding increases over time
+F(t) = 1 - (1 - 1/(2*Ne))^t
+
+# Population declines due to inbreeding depression
+N(t) = N(t-1) * λ * exp(-6.29 * F(t))
 ```
 
-### **Model 2: Population Loss** ✅
-**Without CSV:** Generic 1% Ho reduction
-**With CSV:** Shows actual alleles lost
+**Use case:** Baseline for comparison - shows what happens with no conservation action.
 
-```python
-# Removes EC + KZN individuals
-wild_reduced = wild_df[~Site.isin(['Eastern Cape', 'KwaZulu-Natal'])]
+---
 
-# Identifies lost alleles
-lost = {
-  'Buco4': {165, 188},  # These alleles gone forever!
-  'Buco11': {159},
-  ...
+### **Model 2: Population Loss (Kruger + Limpopo Only)**
+**What it does:** Simulates the loss of Eastern Cape and KwaZulu-Natal populations, tracking which specific alleles are lost forever.
+
+**Alleles lost:** The model identifies exact alleles unique to EC/KZN that disappear:
+```json
+{
+  "Buco4": [165, 188],
+  "Buco11": [159],
+  "GHB21": [149, 161]
 }
 ```
 
-### **Model 3: +4 PAAZA Birds** ✅
-**Without CSV:** Generic Ne increase
-**With CSV:** Adds 4 random PAAZA individuals each generation
+**Population metrics:**
+- Starting N: ~2000 (reduced from 2500)
+- Effective Ne: Scaled proportionally to population size
+- Genetic diversity: Lower starting Ho, He, Na than Model 1
 
+**Use case:** Shows genetic consequences if these populations go extinct.
+
+---
+
+### **Model 3: Low Supplementation (+4 South African Captive Birds/Generation)**
+**What it does:** Adds 4 birds per generation from South African zoos (PAAZA) to the wild population.
+
+**How it works:**
 ```python
-# Generation 0: Wild only
-population = wild_df.copy()
-
-# Generation 1: Add 4 PAAZA
-birds = paaza_df.sample(4)
-population = concat([population, birds])
-calculate_metrics(population)  # Real Ho, He, Na
-
-# Generation 2: Add 4 more
-birds = paaza_df.sample(4)
-population = concat([population, birds])
-calculate_metrics(population)
-
-# ... continues for all generations
+# Each generation:
+1. Calculate genetic metrics from current wild + captive gene pool
+2. Add 4 random PAAZA birds to population
+3. Track released bird cohorts separately
+4. Apply inbreeding depression to wild-born birds
+5. Apply 90% survival rate to captive-released birds
 ```
 
-**Result:** Shows REAL genetic rescue effect from actual alleles!
+**Key assumptions:**
+- PAAZA birds: ~70 individuals in South African zoos
+- Released birds experience **30% of wild inbreeding depression** (lower F)
+- Released birds survive at **90% of wild rate**
+- All released cohorts tracked cumulatively
 
-### **Model 4: +10 PAAZA Birds** ✅
-Same as Model 3 but 10 birds per generation → Stronger effect
+**Novel alleles gained:** Shows which new alleles from PAAZA are introduced to wild population.
 
-### **Model 5: +4 Mixed Birds** ✅
- Samples from PAAZA + AZA + EAZA
+**Use case:** Realistic genetic rescue using locally available captive birds.
 
-```python
-# Mix all captive sources
-mixed = concat([paaza_df, aza_df, eaza_df])
+---
 
-# Add 4 random from mixed pool
-birds = mixed.sample(4)  # Maximum diversity!
-```
+### **Model 4: High Supplementation (+10 South African Captive Birds/Generation)**
+**What it does:** Same as Model 3, but adds 10 PAAZA birds per generation for stronger genetic rescue.
 
-**Result:** Best genetic outcome (most novel alleles)
+**Effect:**
+- Faster Ho/He recovery
+- More novel alleles introduced
+- Greater population size increase
+- Higher cost and logistical burden
 
+**Use case:** Compares cost-benefit of low vs. high supplementation intensity.
 
+---
 
-## 🧮  Genetic Calculations
+### **Model 5: International Mix (+4 Mixed Birds/Generation)**
+**What it does:** Adds 4 birds per generation from a mix of South African (PAAZA), USA/Canada (AZA), and European (EAZA) zoos.
 
-### **Real Observed Heterozygosity:**
+**Captive sources:**
+- **PAAZA** (Pan-African): ~70 birds in South Africa
+- **AZA** (Association of Zoos & Aquariums): ~20 birds in USA/Canada
+- **EAZA** (European): ~55 birds in Europe
+
+**Genetic advantage:** Maximum allelic diversity (combines unique alleles from all 3 sources)
+
+**Logistical challenges:**
+- International transport (expensive, permits, quarantine)
+- Climate adaptation (birds from Europe/USA → South African climate)
+- Disease risk (cross-continental movement)
+
+**Use case:** Best genetic outcome vs. highest logistical cost trade-off.
+
+---
+
+## Genetic & Demographic Calculations
+
+### Genetic Metrics
+
+**Observed Heterozygosity (Ho):**
 ```python
 def calculate_ho(df, locus):
-    genotypes = extract_genotypes(df, locus)
-    heterozygotes = count(allele1 != allele2)
-    return heterozygotes / total
+    genotypes = get_genotypes_for_locus(df, locus)
+    heterozygotes = count(allele1 != allele2 for allele1, allele2 in genotypes)
+    return heterozygotes / len(genotypes)
 ```
 
-### **Real Expected Heterozygosity:**
+**Expected Heterozygosity (He):**
 ```python
 def calculate_he(allele_frequencies):
-    return 1 - sum(freq² for freq in frequencies)
+    # Nei's unbiased estimator
+    return 1 - sum(freq**2 for freq in allele_frequencies.values())
 ```
 
-### **Allelic Richness:**
+**Allelic Richness (Na):**
 ```python
 def calculate_na(df, locus):
-    alleles = extract_all_alleles(df, locus)
-    return len(set(alleles))
+    alleles = get_all_alleles_for_locus(df, locus)
+    return len(set(alleles))  # Count unique alleles
 ```
 
-### **Supplementation Simulation:**
+**Inbreeding Coefficient (F):**
 ```python
-def simulate_supplementation(wild, captive, n_birds, generations):
-    population = wild.copy()
-    results = []
-    
-    for gen in range(generations):
-        # Calculate current metrics
-        Ho = calculate_ho(population)
-        He = calculate_he(population)
-        Na = calculate_na(population)
-        results.append({Ho, He, Na})
-        
-        # Add birds for next generation
-        new_birds = captive.sample(n_birds)
-        population = concat([population, new_birds])
-    
-    return results
+def calculate_fis(Ho, He):
+    # FIS = (He - Ho) / He
+    return (He - Ho) / He if He > 0 else 0
 ```
 
 ---
 
-## 🔬 What can be tracked
+### Population Dynamics
 
-### 1. **Specific Alleles Lost** (Model 2)
+**Wright's Heterozygosity Loss:**
+```python
+# Ht = H0 * (1 - 1/(2*Ne))^t
+def calculate_heterozygosity_loss(H0, Ne, t):
+    return H0 * np.power(1 - 1/(2*Ne), t)
+```
+
+**Inbreeding Accumulation:**
+```python
+# F = 1 - (1 - 1/(2*Ne))^t
+def calculate_inbreeding(Ne, t):
+    return 1 - np.power(1 - 1/(2*Ne), t)
+```
+
+**Allelic Diversity Loss:**
+```python
+# At = A0 * exp(-t / (4*Ne))
+def calculate_allelic_diversity(A0, Ne, t):
+    At = A0 * np.exp(-t / (4*Ne))
+    return np.maximum(At, 2.0)  # Minimum 2 alleles/locus
+```
+
+---
+
+### Inbreeding Depression (NEW!)
+
+**Population size with inbreeding:**
+```python
+def calculate_population_size_with_inbreeding(N0, lambda_val, F_array):
+    """
+    Inbreeding reduces survival: s = exp(-B * F)
+    where B = 6.29 lethal equivalents (O'Grady et al. 2006)
+    """
+    N = np.zeros(len(F_array))
+    N[0] = N0
+
+    for t in range(1, len(F_array)):
+        # Inbreeding reduces survival
+        inbreeding_survival = np.exp(-6.29 * F_array[t])
+
+        # Adjusted growth rate combines demography + genetics
+        lambda_adjusted = lambda_val * inbreeding_survival
+
+        # Population at time t
+        N[t] = N[t-1] * lambda_adjusted
+        N[t] = max(N[t], 10)  # Minimum viable population
+
+    return N
+```
+
+**Key parameters:**
+- **B = 6.29**: Lethal equivalents (moderate inbreeding depression for birds)
+- **λ (lambda)**: Base population growth rate (user-adjustable 0.5-1.5)
+  - λ < 1.0: Declining (habitat loss, persecution)
+  - λ = 1.0: Stable
+  - λ > 1.0: Growing (conservation working)
+
+---
+
+## User-Adjustable Parameters
+
+### 1. **Effective Population Size (Ne)** [375 - 625]
+- Represents breeding individuals (not census size)
+- Ne/N ratio ≈ 0.15-0.25 for cooperative breeders
+- Lower Ne → Faster genetic loss
+
+### 2. **Generations** [10 - 100]
+- Each generation = **26 years** (Southern Ground Hornbill generation time)
+- 10 gen = 260 years
+- 50 gen = 1,300 years
+- 100 gen = 2,600 years
+
+### 3. **Population Growth Rate (λ)** [0.5 - 1.5] **(NEW!)**
+- **λ = 0.90**: 10% decline per generation (habitat loss, climate change)
+- **λ = 1.00**: Stable population (births = deaths)
+- **λ = 1.10**: 10% growth per generation (successful conservation)
+- **Independent of genetics** (accounts for habitat, climate, management)
+
+---
+
+## Supplementation Logic (Models 3-5)
+
+### Cohort Tracking
+
+Released birds are tracked separately from wild-born birds:
+
+```python
+# For each generation:
+N_wild = calculate_with_inbreeding(N0, lambda, F_wild)
+
+# Track all released cohorts
+for each cohort released in past:
+    time_since_release = current_gen - release_gen
+    survival = exp(-6.29 * F_cohort * 0.3) * 0.9  # Lower inbreeding, 90% survival
+    cohort_survivors = birds_released * (survival ** time_since_release)
+    N_released += cohort_survivors
+
+# Total population
+N_total = N_wild + N_released
+```
+
+**Assumptions:**
+- Released birds experience **30% of wild inbreeding** (better genetic quality)
+- Released birds survive at **90% of wild rate** (captive-rearing penalty)
+- All cohorts age together (cumulative tracking)
+
+---
+
+## API Reference
+
+### POST `/api/simulate`
+
+**Request:**
 ```json
 {
-  "lost_alleles": {
-    "Buco4": [165, 188],
-    "Buco11": [159],
-    "GHB21": [149, 161]
-  },
-  "total_lost": 5
+  "Ne": 500,
+  "generations": 50,
+  "lambda": 1.0,
+  "model": 3
 }
 ```
 
-### 2. **Novel Alleles Gained** (Models 3-5)
+**Response:**
 ```json
 {
-  "novel_from_paaza": {
-    "Buco2": [206],
-    "GHB20": [183, 185]
-  },
-  "total_novel": 12
-}
-```
-
-### 3. **Per-Locus Diversity**
-```json
-{
-  "Buco4": {
-    "Ho": 0.523,
-    "He": 0.642,
-    "Na": 8,
-    "alleles": [162, 167, 180, 182, ...]
+  "model_number": 3,
+  "model_name": "Low Supplementation (+4 SA Captive/gen)",
+  "generations": [0, 1, 2, ..., 50],
+  "years": [0, 26, 52, ..., 1300],
+  "Ho": [0.502, 0.501, 0.500, ...],
+  "He": [0.568, 0.567, 0.566, ...],
+  "F": [0.000, 0.001, 0.002, ...],
+  "Na": [6.429, 6.420, 6.410, ...],
+  "population": [2500, 2498, 2495, ...],
+  "Ne": 500,
+  "initial": {"Ho": 0.502, "He": 0.568, "Na": 6.429, "N": 2500},
+  "parameters": {
+    "lambda": 1.0,
+    "data_source": "CSV_simulation",
+    "supplementation": "4 South African captive birds per generation",
+    "supplementation_source": "PAAZA (Pan-African Association of Zoos and Aquaria)",
+    "novel_alleles_added": 12,
+    "inbreeding_depression": "enabled (B=6.29 lethal equivalents)"
   }
 }
 ```
 
----
+### GET `/api/data/info`
 
-## 📡 API Endpoints
-
-### **POST `/api/simulate`**
-Run any model (1-5)
-
-```bash
-curl -X POST http://localhost:5000/api/simulate \
-  -H "Content-Type: application/json" \
-  -d '{"Ne": 100, "generations": 50, "model": 3}'
-```
-
-**Response includes:**
-- Genetic metrics per generation
-- Data source (CSV vs default)
-- Novel alleles count (for Models 3-5)
-- Lost alleles count (for Model 2)
-
-### **GET `/api/data/info`**
-Check if CSV data loaded
-
-```bash
-curl http://localhost:5000/api/data/info
-```
----
-
-
-## ✅ Complete Feature List
-
-### Backend
-- ✅ All 5 models implemented
-- ✅ Real CSV data parsing
-- ✅ Per-locus genetic calculations
-- ✅ Allele frequency tracking
-- ✅ Supplementation simulation
-- ✅ Allele loss identification
-- ✅ Novel allele detection
-- ✅ RESTful API
-
-### Frontend
-- ✅ Model selector tabs
-- ✅ Interactive parameter sliders
-- ✅ 4 Plotly charts (Ho, F, Na, N)
-- ✅ Summary statistics
-- ✅ Responsive design
-- ✅ Error handling
-- ✅ Loading states
-
-### Data Processing
-- ✅ 14 microsatellite loci
-- ✅ Handle missing data (0 values)
-- ✅ Calculate real Ho, He, Na
-- ✅ Track specific alleles
-- ✅ Realistic supplementation
-- ✅ Generation-by-generation simulation
-
----
-
-## 🧪 Testing
-
-### Test All Models:
-```bash
-# Model 1
-curl -X POST http://localhost:5000/api/simulate \
-  -d '{"Ne": 100, "generations": 50, "model": 1}' \
-  -H "Content-Type: application/json"
-
-# Model 2
-curl -X POST http://localhost:5000/api/simulate \
-  -d '{"Ne": 100, "generations": 50, "model": 2}' \
-  -H "Content-Type: application/json"
-
-# Model 3
-curl -X POST http://localhost:5000/api/simulate \
-  -d '{"Ne": 100, "generations": 50, "model": 3}' \
-  -H "Content-Type: application/json"
-
-# Model 4
-curl -X POST http://localhost:5000/api/simulate \
-  -d '{"Ne": 100, "generations": 50, "model": 4}' \
-  -H "Content-Type: application/json"
-
-# Model 5
-curl -X POST http://localhost:5000/api/simulate \
-  -d '{"Ne": 100, "generations": 50, "model": 5}' \
-  -H "Content-Type: application/json"
-```
-
-### Check Data Source:
-```bash
-curl http://localhost:5000/api/data/info | python -m json.tool
+Returns loaded genetic data statistics:
+```json
+{
+  "data_source": "CSV",
+  "populations": {
+    "wild_all": {"sample_size": 199, "Ho": 0.502, "He": 0.568, "Na": 6.429},
+    "paaza": {"sample_size": 70, "Ho": 0.487, "He": 0.551, "Na": 5.8}
+  },
+  "lost_alleles_count": 8,
+  "novel_alleles": {"paaza": 12, "aza": 5, "eaza": 18}
+}
 ```
 
 ---
 
-## 🎓 Scientific Basis
+## Scientific References
 
-### Formulas Used:
-- **Heterozygosity:** Wright (1931)
-- **Inbreeding:** Nei et al. (1975)
-- **Allelic diversity:** Kimura & Crow (1964)
-- **Gene flow:** Mills & Allendorf (1996)
+### Population Genetics Theory
+- **Wright, S. (1931).** Evolution in Mendelian populations. *Genetics* 16:97-159.
+- **Nei, M. et al. (1975).** The bottleneck effect and genetic variability. *Evolution* 29:1-10.
+- **Kimura, M. & Crow, J.F. (1964).** Number of alleles in a finite population. *Genetics* 49:725.
 
-### CSV Data Provides:
-- Real genotypes → Actual Ho calculation
-- Allele frequencies → Accurate He calculation
-- Specific alleles → Realistic drift simulation
-- Individual birds → True supplementation effects
+### Inbreeding Depression
+- **O'Grady, J.J. et al. (2006).** Realistic levels of inbreeding depression strongly affect extinction risk in wild populations. *Biological Conservation* 133:42-51.
+
+### Conservation Genetics
+- **Mills, L.S. & Allendorf, F.W. (1996).** The one-migrant-per-generation rule. *Conservation Biology* 10:1509-1518.
 
 ---
+
+## Data Sources
+
+### Wild Populations (N = 199)
+- **Eastern Cape province**: 48 individuals
+- **Kruger National Park**: 52 individuals
+- **KwaZulu-Natal province**: 51 individuals
+- **Limpopo province**: 48 individuals
+
+### Captive Populations (N = 145)
+- **PAAZA** (Pan-African): ~70 birds (South Africa)
+- **AZA** (USA/Canada): ~20 birds
+- **EAZA** (European): ~55 birds
+
+### Microsatellite Loci (14 total)
+Buco4, Buco11, Buco2, Buco9, GHB21, GHB19, GHB26, GHB20, Buco16, Buco18, Buco19, Buco21, Buco24, Buco25
+
+---
+
+## Model Assumptions
+
+### What the model includes:
+✅ Real microsatellite genotypes (not simulated)
+✅ Inbreeding depression (B = 6.29)
+✅ User-adjustable growth rate (habitat/climate effects)
+✅ Cohort-specific mortality for released birds
+✅ Genetic drift (deterministic, via Wright's equation)
+
+### What the model assumes:
+⚠️ **Generation time = 26 years** (fixed)
+⚠️ **Random mating** within populations
+⚠️ **No natural migration** between wild populations
+⚠️ **No mutation** (new alleles don't appear)
+⚠️ **Released birds integrate immediately** (no behavioral barriers)
+⚠️ **Deterministic** (single trajectory, no stochastic variation)
+
+### What the model does NOT include:
+❌ Environmental stochasticity (random good/bad years)
+❌ Demographic stochasticity (random births/deaths)
+❌ Genetic drift stochasticity (random allele sampling)
+❌ Catastrophes (disease outbreaks, droughts)
+❌ Allee effects (reduced fitness at low density)
+
+---
+
+## Limitations & Caveats
+
+1. **No uncertainty quantification**: Model shows single trajectory, not confidence intervals
+2. **Deterministic genetics**: Real genetic drift is stochastic (random), model uses expected values
+3. **Fixed generation time**: Assumes constant 26 years (may vary by population age structure)
+4. **Ne/N ratio implicit**: User sets Ne directly, not calculated from biology
+5. **Pessimistic assumptions**: Released birds at 90% survival may be conservative
+
+**Recommendation:** Use for **comparing scenarios**, not absolute predictions. Add stochastic simulations for publication-quality uncertainty estimates.
+
+---
+
+## Future Enhancements
+
+### Planned (High Priority)
+- [ ] Stochastic simulations (100+ runs with confidence intervals)
+- [ ] Sensitivity analysis (test different B, λ, generation time)
+- [ ] Document generation time source (why 26 years?)
+
+### Possible (Medium Priority)
+- [ ] Genetic drift stochasticity (random allele sampling)
+- [ ] Demographic stochasticity (Poisson births/deaths)
+- [ ] User-adjustable B (lethal equivalents slider)
+- [ ] Download results as CSV
+
+### Research (Low Priority)
+- [ ] Spatial structure (metapopulation dynamics)
+- [ ] Habitat quality variation
+- [ ] Climate change projections
+- [ ] Cost-benefit analysis module
+
+---
+
+
+

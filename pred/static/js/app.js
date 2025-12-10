@@ -9,6 +9,7 @@ const state = {
     currentModel: 1,
     Ne: 500,
     generations: 50,
+    lambda: 1.00,
     results: null,
     isLoading: false
 };
@@ -53,7 +54,26 @@ function initializeControls() {
         genValue.textContent = state.generations;
         genUnit.textContent = `(${years} years)`;
     });
-    
+
+    // Lambda (growth rate) slider
+    const lambdaSlider = document.getElementById('lambda-slider');
+    const lambdaValue = document.getElementById('lambda-value');
+    const lambdaUnit = document.getElementById('lambda-unit');
+
+    lambdaSlider.addEventListener('input', (e) => {
+        state.lambda = parseFloat(e.target.value);
+        lambdaValue.textContent = state.lambda.toFixed(2);
+
+        // Update descriptive label
+        if (state.lambda < 0.98) {
+            lambdaUnit.textContent = '(declining)';
+        } else if (state.lambda > 1.02) {
+            lambdaUnit.textContent = '(growing)';
+        } else {
+            lambdaUnit.textContent = '(stable)';
+        }
+    });
+
     // Run button
     document.getElementById('run-btn').addEventListener('click', runSimulation);
 }
@@ -92,11 +112,11 @@ function updateModelDescription(modelNum) {
     const descriptions = {
         1: 'Baseline scenario with all wild populations (Eastern Cape, Kruger NP, KwaZulu-Natal, Limpopo)',
         2: 'Simulates loss of Eastern Cape and KwaZulu-Natal populations',
-        3: 'Baseline plus 4 captive birds from PAAZA added each generation',
-        4: 'Baseline plus 10 captive birds from PAAZA added each generation',
-        5: 'Baseline plus 4 birds from mixed captive sources (PAAZA/AZA/EAZA) each generation'
+        3: 'Baseline plus 4 South African captive birds (PAAZA zoos) added each generation',
+        4: 'Baseline plus 10 South African captive birds (PAAZA zoos) added each generation',
+        5: 'Baseline plus 4 birds from mixed captive sources (South African + USA + European zoos) each generation'
     };
-    
+
     document.getElementById('model-description').textContent = descriptions[modelNum];
 }
 
@@ -117,6 +137,7 @@ async function runSimulation() {
             body: JSON.stringify({
                 Ne: state.Ne,
                 generations: state.generations,
+                lambda: state.lambda,
                 model: state.currentModel
             })
         });
