@@ -44,17 +44,17 @@ def initialize_genetic_data():
     global GENETIC_DATA
 
     if os.path.exists(WILD_CSV) and os.path.exists(CAPTIVE_CSV):
-        print("Loading genetic data from CSVs...")
+        logger.info("Loading genetic data from CSVs...")
         GENETIC_DATA = load_and_process_genetic_data(WILD_CSV, CAPTIVE_CSV)
-        print(f"Loaded {len(GENETIC_DATA['summaries'])} populations")
-        print(f"Wild population Ho: {GENETIC_DATA['summaries']['wild_all']['Ho']:.4f}")
+        logger.info(f"Loaded {len(GENETIC_DATA['summaries'])} populations")
+        logger.info(f"Wild population Ho: {GENETIC_DATA['summaries']['wild_all']['Ho']:.4f}")
     else:
-        print("WARNING: CSV files not found. Using default values.")
+        logger.warning("CSV files not found. Using default values.")
         GENETIC_DATA = None
 
 
 
-# GENETIC CALCULATION FUNCTIONS (for models without CSV)
+# GENETIC CALCULATION FUNCTIONS
 
 
 def calculate_heterozygosity_loss(H0, Ne, t):
@@ -78,11 +78,48 @@ def calculate_population_size(N0, lambda_val, t):
     return N0 * np.power(lambda_val, t)
 
 
+def calculate_population_size_with_inbreeding(N0, lambda_val, F_array, lethal_equivalents=6.29):
+    """
+    Population size with inbreeding depression
+
+    Survival is reduced by: s = exp(-B * F)
+    where B = lethal equivalents (typical range: 3-12 for mammals)
+
+    For Southern Ground Hornbill, using B = 6.29 (moderate inbreeding depression)
+    Based on O'Grady et al. 2006 review of inbreeding depression in wild populations
+
+    Args:
+        N0: Initial population size
+        lambda_val: Base growth rate (without inbreeding)
+        F_array: Array of inbreeding coefficients over time
+        lethal_equivalents: Number of lethal equivalents (default 6.29)
+
+    Returns: Array of population sizes incorporating inbreeding depression
+    """
+    N = np.zeros(len(F_array))
+    N[0] = N0
+
+    for t in range(1, len(F_array)):
+        # Calculate survival reduction due to inbreeding
+        inbreeding_survival = np.exp(-lethal_equivalents * F_array[t])
+
+        # Adjusted growth rate
+        lambda_adjusted = lambda_val * inbreeding_survival
+
+        # Population size at time t
+        N[t] = N[t-1] * lambda_adjusted
+
+        # Prevent population from going extinct (minimum viable)
+        N[t] = max(N[t], 10)
+
+    return N
+
+
 
 # MODEL IMPLEMENTATIONS
 
 
-def run_model_1(Ne, generations):
+def run_model_1(Ne, generations, lambda_val=1.0):
     """
     Model 1: Baseline - All wild populations
     Uses real CSV data if available
@@ -93,27 +130,34 @@ def run_model_1(Ne, generations):
         H0 = summary['Ho']
         He0 = summary['He']
         A0 = summary['Na']
-        N0 = summary['sample_size'] * (450 / 199)  # Scale to census
+        N0 = summary['sample_size'] * (2500 / 199)  # Scale to census
     else:
         # Fallback to defaults
         H0 = 0.502
         He0 = 0.568
         A0 = 6.429
-        N0 = 450
-
-    lambda_val = 1.0
+        N0 = 2500
     t = np.arange(0, generations + 1)
+
+    # Calculate genetic metrics
+    Ho_vals = calculate_heterozygosity_loss(H0, Ne, t)
+    He_vals = calculate_heterozygosity_loss(He0, Ne, t)
+    F_vals = calculate_inbreeding(Ne, t)
+    Na_vals = calculate_allelic_diversity(A0, Ne, t)
+
+    # Calculate population size WITH inbreeding depression
+    N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals)
 
     return {
         'model_number': 1,
         'model_name': 'Baseline (All Wild Populations)',
         'generations': t.tolist(),
-        'years': (t * 15).tolist(),
-        'Ho': calculate_heterozygosity_loss(H0, Ne, t).tolist(),
-        'He': calculate_heterozygosity_loss(He0, Ne, t).tolist(),
-        'F': calculate_inbreeding(Ne, t).tolist(),
-        'Na': calculate_allelic_diversity(A0, Ne, t).tolist(),
-        'population': calculate_population_size(N0, lambda_val, t).tolist(),
+        'years': (t * 26).tolist(),
+        'Ho': Ho_vals.tolist(),
+        'He': He_vals.tolist(),
+        'F': F_vals.tolist(),
+        'Na': Na_vals.tolist(),
+        'population': N_vals.tolist(),
         'Ne': Ne,
         'initial': {'Ho': H0, 'He': He0, 'Na': A0, 'N': N0},
         'parameters': {
@@ -121,12 +165,13 @@ def run_model_1(Ne, generations):
             'N0': int(N0),
             'lambda': lambda_val,
             'data_source': 'CSV' if GENETIC_DATA else 'default',
-            'populations': ['Eastern Cape', 'Kruger NP', 'KwaZulu-Natal', 'Limpopo']
+            'populations': ['Eastern Cape', 'Kruger NP', 'KwaZulu-Natal', 'Limpopo'],
+            'inbreeding_depression': 'enabled (B=6.29 lethal equivalents)'
         }
     }
 
 
-def run_model_2(Ne, generations):
+def run_model_2(Ne, generations, lambda_val=1.0):
     """
     Model 2: Population Loss - Only Kruger + Limpopo
     Uses real CSV data to show actual allele loss
@@ -136,7 +181,7 @@ def run_model_2(Ne, generations):
         H0 = summary['Ho']
         He0 = summary['He']
         A0 = summary['Na']
-        N0 = summary['sample_size'] * (450 / 199)
+        N0 = summary['sample_size'] * (2500 / 199)
 
         # Get actual lost alleles
         lost_alleles = GENETIC_DATA['lost_alleles_ec_kzn']
@@ -145,24 +190,32 @@ def run_model_2(Ne, generations):
         H0 = 0.498
         He0 = 0.565
         A0 = 6.1
-        N0 = 398
+        N0 = 2000
         lost_count = 0
 
     # Scale Ne proportionally
-    Ne_scaled = int(Ne * (N0 / 450))
-    lambda_val = 1.0
+    Ne_scaled = int(Ne * (N0 / 2500))
     t = np.arange(0, generations + 1)
+
+    # Calculate genetic metrics
+    Ho_vals = calculate_heterozygosity_loss(H0, Ne_scaled, t)
+    He_vals = calculate_heterozygosity_loss(He0, Ne_scaled, t)
+    F_vals = calculate_inbreeding(Ne_scaled, t)
+    Na_vals = calculate_allelic_diversity(A0, Ne_scaled, t)
+
+    # Calculate population size WITH inbreeding depression
+    N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals)
 
     return {
         'model_number': 2,
         'model_name': 'Population Loss (Kruger + Limpopo Only)',
         'generations': t.tolist(),
-        'years': (t * 15).tolist(),
-        'Ho': calculate_heterozygosity_loss(H0, Ne_scaled, t).tolist(),
-        'He': calculate_heterozygosity_loss(He0, Ne_scaled, t).tolist(),
-        'F': calculate_inbreeding(Ne_scaled, t).tolist(),
-        'Na': calculate_allelic_diversity(A0, Ne_scaled, t).tolist(),
-        'population': calculate_population_size(N0, lambda_val, t).tolist(),
+        'years': (t * 26).tolist(),
+        'Ho': Ho_vals.tolist(),
+        'He': He_vals.tolist(),
+        'F': F_vals.tolist(),
+        'Na': Na_vals.tolist(),
+        'population': N_vals.tolist(),
         'Ne': Ne_scaled,
         'initial': {'Ho': H0, 'He': He0, 'Na': A0, 'N': N0},
         'parameters': {
@@ -172,12 +225,13 @@ def run_model_2(Ne, generations):
             'data_source': 'CSV' if GENETIC_DATA else 'default',
             'populations': ['Kruger NP', 'Limpopo'],
             'lost_populations': ['Eastern Cape', 'KwaZulu-Natal'],
-            'alleles_lost': lost_count if GENETIC_DATA else 'unknown'
+            'alleles_lost': lost_count if GENETIC_DATA else 'unknown',
+            'inbreeding_depression': 'enabled (B=6.29 lethal equivalents)'
         }
     }
 
 
-def run_model_3(Ne, generations):
+def run_model_3(Ne, generations, lambda_val=1.0):
     """
     Model 3: Low Supplementation - Add 4 PAAZA birds per generation
     Uses real CSV data to track actual genetic contribution
@@ -199,43 +253,69 @@ def run_model_3(Ne, generations):
         He = [r['He'] for r in results]
         Na = [r['Na'] for r in results]
         F = [r['FIS'] for r in results]
-        N = [r['population_size'] for r in results]
+        sample_sizes = [r['population_size'] for r in results]
 
         # Scale population to census size
-        N = [n * (450 / 199) for n in N]
+        N_base = [n * (2500 / 199) for n in sample_sizes]
+        N0 = N_base[0]
+
+        # Apply inbreeding depression to wild-born population
+        F_array = np.array(F)
+        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array)
+
+        # Track supplemented birds separately (4 per generation)
+        # Released birds have lower inbreeding and survive at 90% of wild rate
+        N_released = np.zeros(len(N_wild))
+        birds_per_gen = 4
+        captive_survival_multiplier = 0.9
+
+        for gen in range(len(N_wild)):
+            # Track all cohorts of released birds
+            for release_gen in range(gen + 1):
+                time_since_release = gen - release_gen
+                # Released birds experience lower inbreeding depression
+                avg_F_since_release = np.mean(F_array[release_gen:gen+1])
+                survival = np.exp(-6.29 * avg_F_since_release * 0.3) * captive_survival_multiplier
+                cohort_survivors = birds_per_gen * (survival ** time_since_release)
+                N_released[gen] += cohort_survivors
+
+        # Total population = wild-born + released survivors
+        N = N_wild + N_released
 
         t = np.arange(0, generations + 1)
 
         return {
             'model_number': 3,
-            'model_name': 'Low Supplementation (+4 PAAZA/gen)',
+            'model_name': 'Low Supplementation (+4 SA Captive/gen)',
             'generations': t.tolist(),
-            'years': (t * 15).tolist(),
+            'years': (t * 26).tolist(),
             'Ho': Ho,
             'He': He,
             'F': F,
             'Na': Na,
-            'population': N,
+            'population': N.tolist(),
             'Ne': Ne,
             'initial': {'Ho': Ho[0], 'He': He[0], 'Na': Na[0], 'N': N[0]},
             'parameters': {
                 'Ne': Ne,
                 'N0': int(N[0]),
-                'lambda': 1.0,
+                'lambda': lambda_val,
                 'data_source': 'CSV_simulation',
-                'supplementation': '4 PAAZA birds per generation',
-                'novel_alleles_added': len(GENETIC_DATA['novel_alleles']['paaza'])
+                'supplementation': '4 South African captive birds per generation',
+                'supplementation_source': 'PAAZA (Pan-African Association of Zoos and Aquaria)',
+                'novel_alleles_added': len(GENETIC_DATA['novel_alleles']['paaza']),
+                'inbreeding_depression': 'enabled (B=6.29 lethal equivalents)'
             }
         }
     else:
         # Fallback: Generic supplementation model
-        return run_generic_supplementation_model(Ne, generations,
+        return run_generic_supplementation_model(Ne, generations, lambda_val,
                                                   birds_per_gen=4,
                                                   model_num=3,
-                                                  source='PAAZA')
+                                                  source='SA Captive')
 
 
-def run_model_4(Ne, generations):
+def run_model_4(Ne, generations, lambda_val=1.0):
     """
     Model 4: High Supplementation - Add 10 PAAZA birds per generation
     """
@@ -254,38 +334,67 @@ def run_model_4(Ne, generations):
         He = [r['He'] for r in results]
         Na = [r['Na'] for r in results]
         F = [r['FIS'] for r in results]
-        N = [r['population_size'] * (450 / 199) for r in results]
+        sample_sizes = [r['population_size'] for r in results]
+
+        # Scale population to census size
+        N_base = [n * (2500 / 199) for n in sample_sizes]
+        N0 = N_base[0]
+
+        # Apply inbreeding depression to wild-born population
+        F_array = np.array(F)
+        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array)
+
+        # Track supplemented birds separately (10 per generation)
+        # Released birds have lower inbreeding and survive at 90% of wild rate
+        N_released = np.zeros(len(N_wild))
+        birds_per_gen = 10
+        captive_survival_multiplier = 0.9
+
+        for gen in range(len(N_wild)):
+            # Track all cohorts of released birds
+            for release_gen in range(gen + 1):
+                time_since_release = gen - release_gen
+                # Released birds experience lower inbreeding depression
+                avg_F_since_release = np.mean(F_array[release_gen:gen+1])
+                survival = np.exp(-6.29 * avg_F_since_release * 0.3) * captive_survival_multiplier
+                cohort_survivors = birds_per_gen * (survival ** time_since_release)
+                N_released[gen] += cohort_survivors
+
+        # Total population = wild-born + released survivors
+        N = N_wild + N_released
 
         t = np.arange(0, generations + 1)
 
         return {
             'model_number': 4,
-            'model_name': 'High Supplementation (+10 PAAZA/gen)',
+            'model_name': 'High Supplementation (+10 SA Captive/gen)',
             'generations': t.tolist(),
-            'years': (t * 15).tolist(),
+            'years': (t * 26).tolist(),
             'Ho': Ho,
             'He': He,
             'F': F,
             'Na': Na,
-            'population': N,
+            'population': N.tolist(),
             'Ne': Ne,
             'initial': {'Ho': Ho[0], 'He': He[0], 'Na': Na[0], 'N': N[0]},
             'parameters': {
                 'Ne': Ne,
                 'N0': int(N[0]),
-                'lambda': 1.0,
+                'lambda': lambda_val,
                 'data_source': 'CSV_simulation',
-                'supplementation': '10 PAAZA birds per generation'
+                'supplementation': '10 South African captive birds per generation',
+                'supplementation_source': 'PAAZA (Pan-African Association of Zoos and Aquaria)',
+                'inbreeding_depression': 'enabled (B=6.29 lethal equivalents)'
             }
         }
     else:
-        return run_generic_supplementation_model(Ne, generations,
+        return run_generic_supplementation_model(Ne, generations, lambda_val,
                                                   birds_per_gen=10,
                                                   model_num=4,
-                                                  source='PAAZA')
+                                                  source='SA Captive')
 
 
-def run_model_5(Ne, generations):
+def run_model_5(Ne, generations, lambda_val=1.0):
     """
     Model 5: International Mix - Add 4 mixed birds (PAAZA/AZA/EAZA) per generation
     """
@@ -310,7 +419,34 @@ def run_model_5(Ne, generations):
         He = [r['He'] for r in results]
         Na = [r['Na'] for r in results]
         F = [r['FIS'] for r in results]
-        N = [r['population_size'] * (450 / 199) for r in results]
+        sample_sizes = [r['population_size'] for r in results]
+
+        # Scale population to census size
+        N_base = [n * (2500 / 199) for n in sample_sizes]
+        N0 = N_base[0]
+
+        # Apply inbreeding depression to wild-born population
+        F_array = np.array(F)
+        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array)
+
+        # Track supplemented birds separately (4 per generation)
+        # Released birds have lower inbreeding and survive at 90% of wild rate
+        N_released = np.zeros(len(N_wild))
+        birds_per_gen = 4
+        captive_survival_multiplier = 0.9
+
+        for gen in range(len(N_wild)):
+            # Track all cohorts of released birds
+            for release_gen in range(gen + 1):
+                time_since_release = gen - release_gen
+                # Released birds experience lower inbreeding depression
+                avg_F_since_release = np.mean(F_array[release_gen:gen+1])
+                survival = np.exp(-6.29 * avg_F_since_release * 0.3) * captive_survival_multiplier
+                cohort_survivors = birds_per_gen * (survival ** time_since_release)
+                N_released[gen] += cohort_survivors
+
+        # Total population = wild-born + released survivors
+        N = N_wild + N_released
 
         t = np.arange(0, generations + 1)
 
@@ -324,39 +460,40 @@ def run_model_5(Ne, generations):
             'model_number': 5,
             'model_name': 'International Mix (+4 Mixed/gen)',
             'generations': t.tolist(),
-            'years': (t * 15).tolist(),
+            'years': (t * 26).tolist(),
             'Ho': Ho,
             'He': He,
             'F': F,
             'Na': Na,
-            'population': N,
+            'population': N.tolist(),
             'Ne': Ne,
             'initial': {'Ho': Ho[0], 'He': He[0], 'Na': Na[0], 'N': N[0]},
             'parameters': {
                 'Ne': Ne,
                 'N0': int(N[0]),
-                'lambda': 1.0,
+                'lambda': lambda_val,
                 'data_source': 'CSV_simulation',
-                'supplementation': '4 mixed birds (PAAZA/AZA/EAZA) per generation',
-                'novel_alleles_total': novel_count
+                'supplementation': '4 mixed birds (South African + USA + European zoos) per generation',
+                'supplementation_sources': 'PAAZA (South Africa) + AZA (USA/Canada) + EAZA (Europe)',
+                'novel_alleles_total': novel_count,
+                'inbreeding_depression': 'enabled (B=6.29 lethal equivalents)'
             }
         }
     else:
-        return run_generic_supplementation_model(Ne, generations,
+        return run_generic_supplementation_model(Ne, generations, lambda_val,
                                                   birds_per_gen=4,
                                                   model_num=5,
                                                   source='Mixed')
 
 
-def run_generic_supplementation_model(Ne, generations, birds_per_gen, model_num, source):
+def run_generic_supplementation_model(Ne, generations, lambda_val, birds_per_gen, model_num, source):
     """
     Generic supplementation model when CSV data not available
     """
     H0 = 0.502
     He0 = 0.568
     A0 = 6.429
-    N0 = 450
-    lambda_val = 1.0
+    N0 = 2500
 
     t = np.arange(0, generations + 1)
 
@@ -365,7 +502,6 @@ def run_generic_supplementation_model(Ne, generations, birds_per_gen, model_num,
     He_vals = []
     F_vals = []
     Na_vals = []
-    N_vals = []
 
     for gen in t:
         # Cumulative birds added
@@ -379,24 +515,44 @@ def run_generic_supplementation_model(Ne, generations, birds_per_gen, model_num,
         He = calculate_heterozygosity_loss(He0, effective_Ne, gen)
         F = calculate_inbreeding(effective_Ne, gen)
         Na = calculate_allelic_diversity(A0, effective_Ne, gen)
-        N = N0 + birds_added
 
         Ho_vals.append(Ho)
         He_vals.append(He)
         F_vals.append(F)
         Na_vals.append(Na)
-        N_vals.append(N)
+
+    # Calculate population size WITH inbreeding depression
+    F_array = np.array(F_vals)
+    N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array)
+
+    # Track supplemented birds separately
+    # Released birds have lower inbreeding and survive at 90% of wild rate
+    N_released = np.zeros(len(N_wild))
+    captive_survival_multiplier = 0.9
+
+    for gen in range(len(t)):
+        # Track all cohorts of released birds
+        for release_gen in range(gen + 1):
+            time_since_release = gen - release_gen
+            # Released birds experience lower inbreeding depression (30% of wild)
+            avg_F_since_release = np.mean(F_array[release_gen:gen+1])
+            survival = np.exp(-6.29 * avg_F_since_release * 0.3) * captive_survival_multiplier
+            cohort_survivors = birds_per_gen * (survival ** time_since_release)
+            N_released[gen] += cohort_survivors
+
+    # Total population = wild-born + released survivors
+    N_vals = N_wild + N_released
 
     return {
         'model_number': model_num,
         'model_name': f'Supplementation (+{birds_per_gen} {source}/gen)',
         'generations': t.tolist(),
-        'years': (t * 15).tolist(),
+        'years': (t * 26).tolist(),
         'Ho': Ho_vals,
         'He': He_vals,
         'F': F_vals,
         'Na': Na_vals,
-        'population': N_vals,
+        'population': N_vals.tolist(),
         'Ne': Ne,
         'initial': {'Ho': H0, 'He': He0, 'Na': A0, 'N': N0},
         'parameters': {
@@ -404,7 +560,8 @@ def run_generic_supplementation_model(Ne, generations, birds_per_gen, model_num,
             'N0': N0,
             'lambda': lambda_val,
             'data_source': 'generic',
-            'supplementation': f'{birds_per_gen} {source} birds per generation'
+            'supplementation': f'{birds_per_gen} {source} birds per generation',
+            'inbreeding_depression': 'enabled (B=6.29 lethal equivalents)'
         }
     }
 
@@ -425,35 +582,39 @@ def simulate():
     try:
         data = request.get_json()
 
-        Ne = int(data.get('Ne', 100))
+        Ne = int(data.get('Ne', 500))
         generations = int(data.get('generations', 50))
+        lambda_val = float(data.get('lambda', 1.0))
         model = int(data.get('model', 1))
 
         # Validate inputs
-        if not 20 <= Ne <= 200:
-            return jsonify({'error': 'Ne must be between 20 and 200'}), 400
+        if not 375 <= Ne <= 625:
+            return jsonify({'error': 'Ne must be between 375 and 625'}), 400
         if not 10 <= generations <= 100:
             return jsonify({'error': 'Generations must be between 10 and 100'}), 400
+        if not 0.5 <= lambda_val <= 1.5:
+            return jsonify({'error': 'Lambda must be between 0.5 and 1.5'}), 400
         if not 1 <= model <= 5:
             return jsonify({'error': 'Model must be between 1 and 5'}), 400
 
         # Run appropriate model
         if model == 1:
-            results = run_model_1(Ne, generations)
+            results = run_model_1(Ne, generations, lambda_val)
         elif model == 2:
-            results = run_model_2(Ne, generations)
+            results = run_model_2(Ne, generations, lambda_val)
         elif model == 3:
-            results = run_model_3(Ne, generations)
+            results = run_model_3(Ne, generations, lambda_val)
         elif model == 4:
-            results = run_model_4(Ne, generations)
+            results = run_model_4(Ne, generations, lambda_val)
         elif model == 5:
-            results = run_model_5(Ne, generations)
+            results = run_model_5(Ne, generations, lambda_val)
 
         return jsonify(results)
 
     except Exception as e:
         import traceback
         traceback.print_exc()
+        logger.error(f"Simulation error: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 
