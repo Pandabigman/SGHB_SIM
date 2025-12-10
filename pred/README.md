@@ -252,8 +252,7 @@ def calculate_population_size_with_inbreeding(N0, lambda_val, F_array, lethal_eq
     Inbreeding reduces survival: s = exp(-B * F)
     where B = 3.14 lethal equivalents for birds (O'Grady et al. 2006)
 
-    Updated from 6.29 (mammal average) to 3.14 (bird average) for more
-    realistic predictions. Previous value was too pessimistic.
+    
     """
     N = np.zeros(len(F_array))
     N[0] = N0
@@ -297,7 +296,7 @@ def calculate_population_size_with_inbreeding(N0, lambda_val, F_array, lethal_eq
 - 50 gen = 1,300 years
 - 100 gen = 2,600 years
 
-### 3. **Population Growth Rate (λ)** [0.5 - 1.5] **(NEW!)**
+### 3. **Population Growth Rate (λ)** [0.5 - 1.5] 
 - **λ = 0.90**: 10% decline per generation (habitat loss, climate change)
 - **λ = 1.00**: Stable population (births = deaths)
 - **λ = 1.10**: 10% growth per generation (successful conservation)
