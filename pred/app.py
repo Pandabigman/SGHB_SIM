@@ -571,7 +571,7 @@ def simulate():
         lambda_val = float(data.get('lambda', 1.0))
         model = int(data.get('model', 1))
 
-        # Validate inputs
+        # Validate inputs - vercel not seeing these changes
         if not 375 <= Ne <= 625:
             return jsonify({'error': 'Ne must be between 375 and 625'}), 400
         if not 10 <= generations <= 100:
