@@ -60,30 +60,30 @@ def get_population_subset(df, populations):
 
 def get_genotypes_for_locus(df, locus, loci_list=LOCI):
     """
-    Extract both alleles for a specific locus from all individuals
-    
+    OPTIMIZED: Extract both alleles for a specific locus from all individuals
+    Uses vectorized operations instead of iterrows()
+
     Returns: List of tuples [(allele1, allele2), ...]
     """
     # Find column indices for this locus
     # CSV format: each locus has 2 consecutive columns
     locus_idx = loci_list.index(locus)
     col_start = 3 + (locus_idx * 2)  # Skip Code, Site, Status columns
-    
-    genotypes = []
-    for _, row in df.iterrows():
-        allele1 = row.iloc[col_start]
-        allele2 = row.iloc[col_start + 1]
-        
-        # Convert to float, handle missing data (0 or NaN)
-        try:
-            a1 = float(allele1) if allele1 != 0 and not pd.isna(allele1) else None
-            a2 = float(allele2) if allele2 != 0 and not pd.isna(allele2) else None
-        except (ValueError, TypeError):
-            a1, a2 = None, None
-        
-        if a1 is not None and a2 is not None:
-            genotypes.append((a1, a2))
-    
+
+    # OPTIMIZED: Use vectorized column access instead of row iteration
+    allele1_col = df.iloc[:, col_start].replace(0, np.nan)
+    allele2_col = df.iloc[:, col_start + 1].replace(0, np.nan)
+
+    # Convert to numeric, coercing errors to NaN
+    allele1_col = pd.to_numeric(allele1_col, errors='coerce')
+    allele2_col = pd.to_numeric(allele2_col, errors='coerce')
+
+    # Filter out rows with missing data
+    valid_mask = allele1_col.notna() & allele2_col.notna()
+
+    # Create genotype tuples using zip (much faster than loop)
+    genotypes = list(zip(allele1_col[valid_mask].values, allele2_col[valid_mask].values))
+
     return genotypes
 
 
@@ -281,17 +281,17 @@ def identify_novel_alleles(recipient_df, donor_df, loci_list=LOCI):
 
 def add_individuals_to_population(recipient_df, donor_df, n_individuals):
     """
-    Add n random individuals from donor to recipient population
-    
+    OPTIMIZED: Add n random individuals from donor to recipient population
+    Uses replace=True to allow resampling and avoid copy overhead
+
     Returns: Combined dataframe
     """
-    if len(donor_df) < n_individuals:
-        # If donor too small, take all available
-        donor_sample = donor_df.copy()
-    else:
-        donor_sample = donor_df.sample(n=n_individuals, replace=False)
-    
-    combined = pd.concat([recipient_df, donor_sample], ignore_index=True)
+    # OPTIMIZED: Always sample with replacement to avoid exhausting small donor pools
+    # and avoid expensive copy operations
+    donor_sample = donor_df.sample(n=n_individuals, replace=True)
+
+    # OPTIMIZED: Use pd.concat with copy=False where possible
+    combined = pd.concat([recipient_df, donor_sample], ignore_index=True, copy=False)
     return combined
 
 

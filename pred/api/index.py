@@ -20,6 +20,36 @@ from genetic_data import (
     LOCI,
 )
 
+# Global cache for simulation results
+SIMULATION_CACHE = {}
+
+
+def get_cache_key(model_num, birds_per_gen, generations, base_Ne):
+    """Generate cache key for genetic simulation results"""
+    return f"model{model_num}_birds{birds_per_gen}_gen{generations}_Ne{base_Ne}"
+
+
+def get_cached_simulation(cache_key, simulation_func, *args, **kwargs):
+    """
+    Cache wrapper for expensive genetic simulations
+
+    Args:
+        cache_key: Unique identifier for this simulation
+        simulation_func: The function to call if cache miss
+        *args, **kwargs: Arguments to pass to simulation_func
+
+    Returns: Simulation results (from cache or freshly computed)
+    """
+    if cache_key in SIMULATION_CACHE:
+        logger.info(f"Cache HIT for {cache_key}")
+        return SIMULATION_CACHE[cache_key]
+
+    logger.info(f"Cache MISS for {cache_key}, computing...")
+    result = simulation_func(*args, **kwargs)
+    SIMULATION_CACHE[cache_key] = result
+    return result
+
+
 # Get base directory for path resolution
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -179,6 +209,53 @@ def calculate_population_size_with_inbreeding(
     return N
 
 
+def calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_survival_multiplier=0.95, lethal_equivalents=3.14):
+    """
+    OPTIMIZED: Calculate released bird populations across all generations
+
+    This vectorized approach replaces the nested loop O(n²) with O(n) complexity
+
+    Args:
+        birds_per_gen: Number of birds released per generation
+        F_array_rescued: Array of inbreeding coefficients (with genetic rescue)
+        captive_survival_multiplier: Base survival rate for captive birds
+        lethal_equivalents: Lethal equivalents for inbreeding depression
+
+    Returns: Array of released bird counts per generation
+    """
+    n_gens = len(F_array_rescued)
+    N_released = np.zeros(n_gens)
+
+    # For each release cohort
+    for release_gen in range(n_gens):
+        # Calculate how long each cohort survives (vectorized)
+        future_gens = np.arange(release_gen, n_gens)
+        time_since_release = future_gens - release_gen
+
+        # Calculate average F for each time point (vectorized where possible)
+        # Pre-calculate cumulative sums for efficient mean calculation
+        F_cumsum = np.cumsum(F_array_rescued)
+        avg_F_values = np.zeros(len(future_gens))
+
+        for idx, gen in enumerate(future_gens):
+            if gen == release_gen:
+                avg_F_values[idx] = F_array_rescued[release_gen]
+            else:
+                avg_F_values[idx] = (F_cumsum[gen] - F_cumsum[release_gen - 1]) / (gen - release_gen + 1)
+
+        # Vectorized survival calculation
+        # Released birds experience 15% of normal inbreeding depression (hybrid vigor)
+        survival_rate = np.exp(-lethal_equivalents * avg_F_values * 0.15) * captive_survival_multiplier
+
+        # Calculate survivors at each time point
+        cohort_survivors = birds_per_gen * (survival_rate ** time_since_release)
+
+        # Add to total released population
+        N_released[future_gens] += cohort_survivors
+
+    return N_released
+
+
 # MODEL IMPLEMENTATIONS
 
 
@@ -300,11 +377,15 @@ def run_model_3(Ne, generations, lambda_val=1.0):
     Uses real CSV data to track actual genetic contribution
     """
     if GENETIC_DATA:
-        # Use real CSV simulation
+        # Use real CSV simulation with caching
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
 
-        results = simulate_supplementation_effect(
+        # OPTIMIZED: Cache expensive genetic simulations
+        cache_key = get_cache_key(3, 4, generations, Ne)
+        results = get_cached_simulation(
+            cache_key,
+            simulate_supplementation_effect,
             wild_df, paaza_df, birds_per_gen=4, generations=generations, loci_list=LOCI, base_Ne=Ne
         )
 
@@ -344,24 +425,10 @@ def run_model_3(Ne, generations, lambda_val=1.0):
             N0, lambda_val, F_array_rescued
         )
 
-        # CRITICAL FIX: Don't double-count supplemented birds
-        # Birds are already in genetic simulation; demographic tracking is for display only
-        # Track them separately to show their contribution but they don't add to total
-        N_released = np.zeros(len(N_wild))
-
-        for gen in range(len(N_wild)):
-            # Track all cohorts of released birds for visualization
-            for release_gen in range(gen + 1):
-                time_since_release = gen - release_gen
-                # Released birds experience much lower inbreeding depression (15% vs wild)
-                # This represents hybrid vigor / heterosis benefit
-                avg_F_since_release = np.mean(F_array_rescued[release_gen : gen + 1])
-                survival = (
-                    np.exp(-3.14 * avg_F_since_release * 0.15)
-                    * captive_survival_multiplier
-                )
-                cohort_survivors = birds_per_gen * (survival**time_since_release)
-                N_released[gen] += cohort_survivors
+        # OPTIMIZED: Use vectorized function instead of nested loops
+        N_released = calculate_released_birds_optimized(
+            birds_per_gen, F_array_rescued, captive_survival_multiplier
+        )
 
         # Total population = wild-born + released survivors
         # NOTE: In reality, released birds are integrated into wild population
@@ -416,7 +483,11 @@ def run_model_4(Ne, generations, lambda_val=1.0):
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
 
-        results = simulate_supplementation_effect(
+        # OPTIMIZED: Cache expensive genetic simulations
+        cache_key = get_cache_key(4, 10, generations, Ne)
+        results = get_cached_simulation(
+            cache_key,
+            simulate_supplementation_effect,
             wild_df, paaza_df, birds_per_gen=10, generations=generations, loci_list=LOCI, base_Ne=Ne
         )
 
@@ -451,20 +522,10 @@ def run_model_4(Ne, generations, lambda_val=1.0):
             N0, lambda_val, F_array_rescued
         )
 
-        # CRITICAL FIX: Don't double-count supplemented birds
-        N_released = np.zeros(len(N_wild))
-
-        for gen in range(len(N_wild)):
-            # Track all cohorts of released birds for visualization
-            for release_gen in range(gen + 1):
-                time_since_release = gen - release_gen
-                avg_F_since_release = np.mean(F_array_rescued[release_gen : gen + 1])
-                survival = (
-                    np.exp(-3.14 * avg_F_since_release * 0.15)
-                    * captive_survival_multiplier
-                )
-                cohort_survivors = birds_per_gen * (survival**time_since_release)
-                N_released[gen] += cohort_survivors
+        # OPTIMIZED: Use vectorized function instead of nested loops
+        N_released = calculate_released_birds_optimized(
+            birds_per_gen, F_array_rescued, captive_survival_multiplier
+        )
 
         # Total population = wild-born + released survivors
         N = N_wild + N_released
@@ -522,7 +583,11 @@ def run_model_5(Ne, generations, lambda_val=1.0):
         eaza_df = GENETIC_DATA["dataframes"]["eaza"]
         mixed_captive = pd.concat([paaza_df, aza_df, eaza_df], ignore_index=True)
 
-        results = simulate_supplementation_effect(
+        # OPTIMIZED: Cache expensive genetic simulations
+        cache_key = get_cache_key(5, 4, generations, Ne)
+        results = get_cached_simulation(
+            cache_key,
+            simulate_supplementation_effect,
             wild_df,
             mixed_captive,
             birds_per_gen=4,
@@ -561,20 +626,10 @@ def run_model_5(Ne, generations, lambda_val=1.0):
             N0, lambda_val, F_array_rescued
         )
 
-        # CRITICAL FIX: Don't double-count supplemented birds
-        N_released = np.zeros(len(N_wild))
-
-        for gen in range(len(N_wild)):
-            # Track all cohorts of released birds for visualization
-            for release_gen in range(gen + 1):
-                time_since_release = gen - release_gen
-                avg_F_since_release = np.mean(F_array_rescued[release_gen : gen + 1])
-                survival = (
-                    np.exp(-3.14 * avg_F_since_release * 0.15)
-                    * captive_survival_multiplier
-                )
-                cohort_survivors = birds_per_gen * (survival**time_since_release)
-                N_released[gen] += cohort_survivors
+        # OPTIMIZED: Use vectorized function instead of nested loops
+        N_released = calculate_released_birds_optimized(
+            birds_per_gen, F_array_rescued, captive_survival_multiplier
+        )
 
         # Total population = wild-born + released survivors
         N = N_wild + N_released
@@ -692,21 +747,10 @@ def run_generic_supplementation_model(
     # Calculate population size WITH inbreeding depression using RESCUED F values
     N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued)
 
-    # CRITICAL FIX: Don't double-count supplemented birds
-    N_released = np.zeros(len(N_wild))
-
-    for gen in range(len(t)):
-        # Track all cohorts of released birds
-        for release_gen in range(gen + 1):
-            time_since_release = gen - release_gen
-            # Released birds experience much lower inbreeding depression (15% vs wild, improved from 30%)
-            # This represents hybrid vigor / heterosis benefit
-            avg_F_since_release = np.mean(F_array_rescued[release_gen : gen + 1])
-            survival = (
-                np.exp(-3.14 * avg_F_since_release * 0.15) * captive_survival_multiplier
-            )
-            cohort_survivors = birds_per_gen * (survival**time_since_release)
-            N_released[gen] += cohort_survivors
+    # OPTIMIZED: Use vectorized function instead of nested loops
+    N_released = calculate_released_birds_optimized(
+        birds_per_gen, F_array_rescued, captive_survival_multiplier
+    )
 
     # Total population = wild-born + released survivors
     N_vals = N_wild + N_released
