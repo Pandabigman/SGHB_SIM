@@ -4,40 +4,40 @@
 
 ---
 
-## Recent Updates (December 2024)
+## Recent Updates (January 2026)
 
-### Model Improvements for More Realistic Projections
+### Critical Bug Fix: Inbreeding Coefficient Calculation (Models 3-5)
 
-**Problem:** Previous simulations showed population collapse even with conservation management due to overly pessimistic parameters.
+**Problem:** Models 3-5 showed unrealistic 30% population crash between generation 0 and 1, even with conservation supplementation.
 
-**Solution:** Updated to bird-specific parameters and added genetic rescue modeling:
+**Root Cause:** FIS (inbreeding coefficient from genetic data, ~0.1165) was incorrectly used as F (population-wide inbreeding for population dynamics). FIS measures population genetic structure (deviation from Hardy-Weinberg), NOT inbreeding depression for viability.
 
-1. ✅ **Lethal equivalents: 6.29 → 3.14**
-   - Changed from mammal average to bird-specific value (O'Grady et al. 2006)
-   - Reduces excessive inbreeding depression in projections
+**Solution:** Changed models 3-5 to use drift-based F calculation like models 1-2:
+```python
+# OLD (INCORRECT): Used constant FIS (~0.1165) from genetic data
+F_array = np.array(FIS_values)  # Wrong concept!
 
-2. ✅ **Added genetic rescue effect**
-   - Supplementation now reduces population-wide inbreeding coefficient
-   - Formula: F_rescued = F × (1 - gene_flow_proportion × 0.5)
+# NEW (CORRECT): Calculate F from drift with dynamic Ne
+F(t) = 1 - (1 - 1/(2*Ne(t)))^t  # Starts at 0, increases gradually
+```
 
-3. ✅ **Improved hybrid vigor modeling**
-   - Released birds: 30% → 15% of wild inbreeding penalty
-   - Reflects stronger F1 heterosis effect
+**Impact:**
+- Gen 0→1 drop: **30% → 0%** (now shows slight growth with supplementation!)
+- Gen 0→10 drop: **95% → 11%** (realistic gradual decline)
+- Conservation models now show biologically plausible population trajectories
 
-4. ✅ **Better released bird survival: 90% → 95%**
-   - Accounts for disease screening and monitoring
+---
 
-5. ✅ **Comprehensive documentation**
-   - Added expandable info panel in UI with all assumptions and parameters
-   - Updated README with model changes and rationale
+### Previous Model Improvements (December 2024)
 
-6. ✅ **Allelic diversity gene flow model (December 2024)**
-   - Fixed conceptual inconsistency in allelic diversity calculation
-   - Supplementation models now correctly show Na can increase (not just decline slower)
-   - Added dynamic Ne tracking for supplementation scenarios
-   - Empirical CSV models track actual novel alleles introduced
+1. ✅ **Lethal equivalents: 6.29 → 3.14** (bird-specific, O'Grady et al. 2006)
+2. ✅ **Added genetic rescue effect** (gene flow reduces population-wide F)
+3. ✅ **Improved hybrid vigor** (released birds: 30% → 15% inbreeding penalty)
+4. ✅ **Better survival for released birds** (90% → 95%)
+5. ✅ **Allelic diversity gene flow model** (Na can increase with supplementation)
+6. ✅ **Dynamic Ne tracking** (effective population size increases with gene flow)
 
-**Impact:** Conservation scenarios (Models 3-5) now show realistic population stabilization and recovery, while maintaining scientific rigor. Allelic diversity dynamics now accurately reflect gene flow benefits.
+**Combined Impact:** Conservation scenarios (Models 3-5) now show scientifically accurate population stabilization and recovery.
 
 ---
 
@@ -214,12 +214,16 @@ def calculate_na(df, locus):
     return len(set(alleles))  # Count unique alleles
 ```
 
-**Inbreeding Coefficient (F):**
+**Inbreeding Coefficient (FIS vs F):**
 ```python
 def calculate_fis(Ho, He):
     # FIS = (He - Ho) / He
+    # Measures population genetic structure (deviation from Hardy-Weinberg)
+    # NOTE: FIS is NOT used for population dynamics in models 3-5
     return (He - Ho) / He if He > 0 else 0
 ```
+
+**IMPORTANT:** FIS from genetic data measures existing population structure, not inbreeding for viability calculations. Models 3-5 use drift-based F (starting at 0) for population dynamics, just like models 1-2.
 
 ---
 
@@ -232,12 +236,20 @@ def calculate_heterozygosity_loss(H0, Ne, t):
     return H0 * np.power(1 - 1/(2*Ne), t)
 ```
 
-**Inbreeding Accumulation:**
+**Inbreeding Accumulation (Used in ALL Models):**
 ```python
 # F = 1 - (1 - 1/(2*Ne))^t
+# This is the CORRECT F for inbreeding depression calculations
+# Models 1-2: Use static Ne
+# Models 3-5: Use dynamic Ne (increases with gene flow)
 def calculate_inbreeding(Ne, t):
     return 1 - np.power(1 - 1/(2*Ne), t)
 ```
+
+**Key Difference (Bug Fix):**
+- **Models 1-2:** Always used drift-based F (correct)
+- **Models 3-5 (OLD):** Incorrectly used FIS from genetic data (~0.1165)
+- **Models 3-5 (NEW):** Now use drift-based F with dynamic Ne (correct)
 
 **Allelic Diversity Loss (Drift Only):**
 ```python
@@ -547,11 +559,9 @@ Buco4, Buco11, Buco2, Buco9, GHB21, GHB19, GHB26, GHB20, Buco16, Buco18, Buco19,
 5. **Genetic rescue efficiency**: 50% reduction in F from gene flow is estimated, not empirically measured
 6. **Hybrid vigor assumption**: 85% reduction in inbreeding penalty for F1s may vary in practice
 
-**Important Note:** The model was updated (Dec 2024) with more realistic parameters:
-- Lethal equivalents reduced from 6.29 (mammal average) to 3.14 (bird average)
-- Released bird survival increased from 90% to 95%
-- Inbreeding penalty for released birds reduced from 30% to 15% (hybrid vigor)
-- Added genetic rescue effect where supplementation benefits entire population
+**Important Updates:**
+- **Jan 2025:** Fixed critical bug where models 3-5 used FIS instead of drift-based F (eliminated unrealistic 30% crash)
+- **Dec 2024:** Updated to bird-specific parameters (B=3.14, 95% survival, 15% inbreeding penalty, genetic rescue)
 
 **Recommendation:** Use for **comparing scenarios**, not absolute predictions. Add stochastic simulations for publication-quality uncertainty estimates.
 

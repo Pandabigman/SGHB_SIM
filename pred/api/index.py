@@ -431,8 +431,17 @@ def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
         # The genetic simulation adds samples for tracking alleles, not census population
         N0 = 2500  # Fixed census size for wild population
 
-        # Extract F array from genetic simulation
-        F_array = np.array(F)
+        # BUG FIX: Use drift-based F calculation like models 1-2
+        # FIS from genetic data is population structure, NOT inbreeding depression coefficient
+        # Use theoretical F from drift equation with dynamic Ne
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+
+        for gen in range(len(t)):
+            # Use effective Ne at this generation (increases with gene flow)
+            Ne_current = effective_Ne_vals[gen]
+            # Calculate accumulated inbreeding from drift: F(t) = 1 - (1 - 1/(2*Ne))^t
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
 
         # Track supplemented birds parameters
         birds_per_gen = 4
@@ -533,8 +542,17 @@ def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
         # CRITICAL FIX: Keep initial wild population size separate from genetic samples
         N0 = 2500  # Fixed census size for wild population
 
-        # Extract F array from genetic simulation
-        F_array = np.array(F)
+        # BUG FIX: Use drift-based F calculation like models 1-2
+        # FIS from genetic data is population structure, NOT inbreeding depression coefficient
+        # Use theoretical F from drift equation with dynamic Ne
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+
+        for gen in range(len(t)):
+            # Use effective Ne at this generation (increases with gene flow)
+            Ne_current = effective_Ne_vals[gen]
+            # Calculate accumulated inbreeding from drift: F(t) = 1 - (1 - 1/(2*Ne))^t
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
 
         # Track supplemented birds parameters
         birds_per_gen = 10
@@ -639,8 +657,17 @@ def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
         # CRITICAL FIX: Keep initial wild population size separate from genetic samples
         N0 = 2500  # Fixed census size for wild population
 
-        # Extract F array from genetic simulation
-        F_array = np.array(F)
+        # BUG FIX: Use drift-based F calculation like models 1-2
+        # FIS from genetic data is population structure, NOT inbreeding depression coefficient
+        # Use theoretical F from drift equation with dynamic Ne
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+
+        for gen in range(len(t)):
+            # Use effective Ne at this generation (increases with gene flow)
+            Ne_current = effective_Ne_vals[gen]
+            # Calculate accumulated inbreeding from drift: F(t) = 1 - (1 - 1/(2*Ne))^t
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
 
         # Track supplemented birds parameters
         birds_per_gen = 4
