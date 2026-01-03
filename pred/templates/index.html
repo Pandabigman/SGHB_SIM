@@ -261,6 +261,25 @@
                 </div>
             </div>
 
+            <div class="control-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="stochastic-toggle" style="width: 20px; height: 20px; cursor: pointer;">
+                    <span style="flex: 1;">
+                        <strong>Enable Stochasticity</strong>
+                        <span style="display: block; font-size: 0.85em; color: #666; margin-top: 3px; font-weight: normal;">
+                            Add random variation in births/deaths (demographic) and environmental conditions to simulate real-world uncertainty
+                        </span>
+                    </span>
+                </label>
+                <div id="stochastic-info" class="info-box" style="margin-top: 10px; display: none; font-size: 0.85em;">
+                    <strong>⚠️ Stochastic Mode:</strong> Results will vary between runs. The model adds:
+                    <ul style="margin: 5px 0 0 20px;">
+                        <li><strong>Demographic stochasticity:</strong> Random variation in births/deaths each generation</li>
+                        <li><strong>Environmental stochasticity:</strong> Random fluctuations in growth rate (σ<sub>env</sub> = 0.10)</li>
+                    </ul>
+                </div>
+            </div>
+
             <button id="run-btn">Run Simulation</button>
         </div>
         

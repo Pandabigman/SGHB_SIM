@@ -10,6 +10,7 @@ const state = {
     Ne: 500,
     generations: 50,
     lambda: 1.00,
+    stochastic: false,
     results: null,
     isLoading: false
 };
@@ -72,6 +73,15 @@ function initializeControls() {
         } else {
             lambdaUnit.textContent = '(stable)';
         }
+    });
+
+    // Stochastic toggle
+    const stochasticToggle = document.getElementById('stochastic-toggle');
+    const stochasticInfo = document.getElementById('stochastic-info');
+
+    stochasticToggle.addEventListener('change', (e) => {
+        state.stochastic = e.target.checked;
+        stochasticInfo.style.display = e.target.checked ? 'block' : 'none';
     });
 
     // Run button
@@ -138,7 +148,8 @@ async function runSimulation() {
                 Ne: state.Ne,
                 generations: state.generations,
                 lambda: state.lambda,
-                model: state.currentModel
+                model: state.currentModel,
+                stochastic: state.stochastic
             })
         });
         

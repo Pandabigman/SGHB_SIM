@@ -24,22 +24,29 @@ from genetic_data import (
 SIMULATION_CACHE = {}
 
 
-def get_cache_key(model_num, birds_per_gen, generations, base_Ne):
+def get_cache_key(model_num, birds_per_gen, generations, base_Ne, stochastic=False):
     """Generate cache key for genetic simulation results"""
-    return f"model{model_num}_birds{birds_per_gen}_gen{generations}_Ne{base_Ne}"
+    stoch_suffix = "_stoch" if stochastic else ""
+    return f"model{model_num}_birds{birds_per_gen}_gen{generations}_Ne{base_Ne}{stoch_suffix}"
 
 
-def get_cached_simulation(cache_key, simulation_func, *args, **kwargs):
+def get_cached_simulation(cache_key, simulation_func, stochastic=False, *args, **kwargs):
     """
     Cache wrapper for expensive genetic simulations
 
     Args:
         cache_key: Unique identifier for this simulation
         simulation_func: The function to call if cache miss
+        stochastic: If True, skip caching (each run should be unique)
         *args, **kwargs: Arguments to pass to simulation_func
 
     Returns: Simulation results (from cache or freshly computed)
     """
+    # IMPORTANT: Don't cache stochastic simulations - they should vary each run
+    if stochastic:
+        logger.info(f"Stochastic mode - skipping cache")
+        return simulation_func(*args, **kwargs)
+
     if cache_key in SIMULATION_CACHE:
         logger.info(f"Cache HIT for {cache_key}")
         return SIMULATION_CACHE[cache_key]
@@ -170,7 +177,7 @@ def calculate_population_size(N0, lambda_val, t):
 
 
 def calculate_population_size_with_inbreeding(
-    N0, lambda_val, F_array, lethal_equivalents=3.14
+    N0, lambda_val, F_array, lethal_equivalents=3.14, stochastic=False, env_sigma=0.10
 ):
     """
     Population size with inbreeding depression
@@ -187,6 +194,8 @@ def calculate_population_size_with_inbreeding(
         lambda_val: Base growth rate (without inbreeding)
         F_array: Array of inbreeding coefficients over time
         lethal_equivalents: Number of lethal equivalents (default 3.14)
+        stochastic: If True, add demographic and environmental stochasticity
+        env_sigma: Environmental stochasticity standard deviation (default 0.10)
 
     Returns: Array of population sizes incorporating inbreeding depression
     """
@@ -197,11 +206,31 @@ def calculate_population_size_with_inbreeding(
         # Calculate survival reduction due to inbreeding from the previous generation
         inbreeding_survival = np.exp(-lethal_equivalents * F_array[t - 1])
 
-        # Adjusted growth rate
+        # Base adjusted growth rate
         lambda_adjusted = lambda_val * inbreeding_survival
 
-        # Population size at time t is based on the size at t-1 and the adjusted growth rate
-        N[t] = N[t - 1] * lambda_adjusted
+        if stochastic:
+            # ENVIRONMENTAL STOCHASTICITY: Random variation in growth rate
+            # Add normal random variation to lambda (log-normal would be more realistic but normal is simpler)
+            lambda_stochastic = lambda_adjusted + np.random.normal(0, env_sigma)
+            # Ensure lambda stays positive
+            lambda_stochastic = max(lambda_stochastic, 0.5)
+
+            # DEMOGRAPHIC STOCHASTICITY: Random variation in actual population change
+            # Expected population size
+            expected_N = N[t - 1] * lambda_stochastic
+
+            # Add Poisson variation for discrete individuals
+            # For large populations, use normal approximation to avoid overflow
+            if expected_N > 1000:
+                # Normal approximation: N ~ Normal(expected, sqrt(expected))
+                N[t] = np.random.normal(expected_N, np.sqrt(expected_N))
+            else:
+                # Poisson for smaller populations
+                N[t] = np.random.poisson(expected_N)
+        else:
+            # Deterministic calculation
+            N[t] = N[t - 1] * lambda_adjusted
 
         # Prevent population from going extinct (minimum viable)
         N[t] = max(N[t], 10)
@@ -259,7 +288,7 @@ def calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_s
 # MODEL IMPLEMENTATIONS
 
 
-def run_model_1(Ne, generations, lambda_val=1.0):
+def run_model_1(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 1: Baseline - All wild populations
     Uses real CSV data if available
@@ -286,7 +315,7 @@ def run_model_1(Ne, generations, lambda_val=1.0):
     Na_vals = calculate_allelic_diversity(A0, Ne, t)
 
     # Calculate population size WITH inbreeding depression
-    N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals)
+    N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals, stochastic=stochastic)
 
     return {
         "model_number": 1,
@@ -311,7 +340,7 @@ def run_model_1(Ne, generations, lambda_val=1.0):
     }
 
 
-def run_model_2(Ne, generations, lambda_val=1.0):
+def run_model_2(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 2: Population Loss - Only Kruger + Limpopo
     Uses real CSV data to show actual allele loss
@@ -344,7 +373,7 @@ def run_model_2(Ne, generations, lambda_val=1.0):
     Na_vals = calculate_allelic_diversity(A0, Ne_scaled, t)
 
     # Calculate population size WITH inbreeding depression
-    N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals)
+    N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals, stochastic=stochastic)
 
     return {
         "model_number": 2,
@@ -371,7 +400,7 @@ def run_model_2(Ne, generations, lambda_val=1.0):
     }
 
 
-def run_model_3(Ne, generations, lambda_val=1.0):
+def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 3: Low Supplementation - Add 4 PAAZA birds per generation
     Uses real CSV data to track actual genetic contribution
@@ -381,11 +410,12 @@ def run_model_3(Ne, generations, lambda_val=1.0):
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
 
-        # OPTIMIZED: Cache expensive genetic simulations
-        cache_key = get_cache_key(3, 4, generations, Ne)
+        # OPTIMIZED: Cache expensive genetic simulations (skip cache if stochastic)
+        cache_key = get_cache_key(3, 4, generations, Ne, stochastic)
         results = get_cached_simulation(
             cache_key,
             simulate_supplementation_effect,
+            stochastic,
             wild_df, paaza_df, birds_per_gen=4, generations=generations, loci_list=LOCI, base_Ne=Ne
         )
 
@@ -422,7 +452,7 @@ def run_model_3(Ne, generations, lambda_val=1.0):
 
         # Apply inbreeding depression to wild-born population using RESCUED F values
         N_wild = calculate_population_size_with_inbreeding(
-            N0, lambda_val, F_array_rescued
+            N0, lambda_val, F_array_rescued, stochastic=stochastic
         )
 
         # OPTIMIZED: Use vectorized function instead of nested loops
@@ -472,10 +502,11 @@ def run_model_3(Ne, generations, lambda_val=1.0):
             birds_per_gen=4,
             model_num=3,
             source="SA Captive",
+            stochastic=stochastic,
         )
 
 
-def run_model_4(Ne, generations, lambda_val=1.0):
+def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 4: High Supplementation - Add 10 PAAZA birds per generation
     """
@@ -483,11 +514,12 @@ def run_model_4(Ne, generations, lambda_val=1.0):
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
 
-        # OPTIMIZED: Cache expensive genetic simulations
-        cache_key = get_cache_key(4, 10, generations, Ne)
+        # OPTIMIZED: Cache expensive genetic simulations (skip cache if stochastic)
+        cache_key = get_cache_key(4, 10, generations, Ne, stochastic)
         results = get_cached_simulation(
             cache_key,
             simulate_supplementation_effect,
+            stochastic,
             wild_df, paaza_df, birds_per_gen=10, generations=generations, loci_list=LOCI, base_Ne=Ne
         )
 
@@ -519,7 +551,7 @@ def run_model_4(Ne, generations, lambda_val=1.0):
 
         # Apply inbreeding depression to wild-born population using RESCUED F values
         N_wild = calculate_population_size_with_inbreeding(
-            N0, lambda_val, F_array_rescued
+            N0, lambda_val, F_array_rescued, stochastic=stochastic
         )
 
         # OPTIMIZED: Use vectorized function instead of nested loops
@@ -565,10 +597,11 @@ def run_model_4(Ne, generations, lambda_val=1.0):
             birds_per_gen=10,
             model_num=4,
             source="SA Captive",
+            stochastic=stochastic,
         )
 
 
-def run_model_5(Ne, generations, lambda_val=1.0):
+def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 5: International Mix - Add 4 mixed birds (PAAZA/AZA/EAZA) per generation
     """
@@ -583,11 +616,12 @@ def run_model_5(Ne, generations, lambda_val=1.0):
         eaza_df = GENETIC_DATA["dataframes"]["eaza"]
         mixed_captive = pd.concat([paaza_df, aza_df, eaza_df], ignore_index=True)
 
-        # OPTIMIZED: Cache expensive genetic simulations
-        cache_key = get_cache_key(5, 4, generations, Ne)
+        # OPTIMIZED: Cache expensive genetic simulations (skip cache if stochastic)
+        cache_key = get_cache_key(5, 4, generations, Ne, stochastic)
         results = get_cached_simulation(
             cache_key,
             simulate_supplementation_effect,
+            stochastic,
             wild_df,
             mixed_captive,
             birds_per_gen=4,
@@ -623,7 +657,7 @@ def run_model_5(Ne, generations, lambda_val=1.0):
 
         # Apply inbreeding depression to wild-born population using RESCUED F values
         N_wild = calculate_population_size_with_inbreeding(
-            N0, lambda_val, F_array_rescued
+            N0, lambda_val, F_array_rescued, stochastic=stochastic
         )
 
         # OPTIMIZED: Use vectorized function instead of nested loops
@@ -669,12 +703,12 @@ def run_model_5(Ne, generations, lambda_val=1.0):
         }
     else:
         return run_generic_supplementation_model(
-            Ne, generations, lambda_val, birds_per_gen=4, model_num=5, source="Mixed"
+            Ne, generations, lambda_val, birds_per_gen=4, model_num=5, source="Mixed", stochastic=stochastic
         )
 
 
 def run_generic_supplementation_model(
-    Ne, generations, lambda_val, birds_per_gen, model_num, source
+    Ne, generations, lambda_val, birds_per_gen, model_num, source, stochastic=False
 ):
     """
     Generic supplementation model when CSV data not available
@@ -745,7 +779,7 @@ def run_generic_supplementation_model(
             F_array_rescued[gen] = F_array[gen] * (1 - gene_flow_proportion * 0.5)
 
     # Calculate population size WITH inbreeding depression using RESCUED F values
-    N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued)
+    N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued, stochastic=stochastic)
 
     # OPTIMIZED: Use vectorized function instead of nested loops
     N_released = calculate_released_birds_optimized(
@@ -801,6 +835,7 @@ def simulate():
         generations = int(data.get("generations", 50))
         lambda_val = float(data.get("lambda", 1.0))
         model = int(data.get("model", 1))
+        stochastic = bool(data.get("stochastic", False))
 
         # Validate inputs
         if not 375 <= Ne <= 625:
@@ -814,15 +849,15 @@ def simulate():
 
         # Run appropriate model
         if model == 1:
-            results = run_model_1(Ne, generations, lambda_val)
+            results = run_model_1(Ne, generations, lambda_val, stochastic)
         elif model == 2:
-            results = run_model_2(Ne, generations, lambda_val)
+            results = run_model_2(Ne, generations, lambda_val, stochastic)
         elif model == 3:
-            results = run_model_3(Ne, generations, lambda_val)
+            results = run_model_3(Ne, generations, lambda_val, stochastic)
         elif model == 4:
-            results = run_model_4(Ne, generations, lambda_val)
+            results = run_model_4(Ne, generations, lambda_val, stochastic)
         elif model == 5:
-            results = run_model_5(Ne, generations, lambda_val)
+            results = run_model_5(Ne, generations, lambda_val, stochastic)
 
         return jsonify(results)
 
