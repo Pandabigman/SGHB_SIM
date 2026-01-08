@@ -402,7 +402,7 @@ def run_model_2(Ne, generations, lambda_val=1.0, stochastic=False):
 
 def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
     """
-    Model 3: Low Supplementation - Add 4 PAAZA birds per generation
+    Model 3: Low Supplementation - Add 4 SA Captive birds per generation
     Uses real CSV data to track actual genetic contribution
     """
     if GENETIC_DATA:
@@ -496,7 +496,7 @@ def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
                 "lambda": lambda_val,
                 "data_source": "CSV_simulation",
                 "supplementation": "4 South African captive birds per generation",
-                "supplementation_source": "PAAZA (Pan-African Association of Zoos and Aquaria)",
+                "supplementation_source": "SA Captive (South African Zoos and Aquaria)",
                 "novel_alleles_added": len(GENETIC_DATA["novel_alleles"]["paaza"]),
                 "allele_model": "empirical (real genetic data tracks novel allele gain)",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
@@ -517,7 +517,7 @@ def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
 
 def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
     """
-    Model 4: High Supplementation - Add 10 PAAZA birds per generation
+    Model 4: High Supplementation - Add 10 SA Captive birds per generation
     """
     if GENETIC_DATA:
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
@@ -602,7 +602,7 @@ def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
                 "lambda": lambda_val,
                 "data_source": "CSV_simulation",
                 "supplementation": "10 South African captive birds per generation",
-                "supplementation_source": "PAAZA (Pan-African Association of Zoos and Aquaria)",
+                "supplementation_source": "SA Captive (South African Zoos and Aquaria)",
                 "allele_model": "empirical (real genetic data tracks novel allele gain)",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
             },
@@ -621,7 +621,7 @@ def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
 
 def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
     """
-    Model 5: International Mix - Add 4 mixed birds (PAAZA/AZA/EAZA) per generation
+    Model 5: International Mix - Add 4 mixed birds (SA Captive/AZA/EAZA) per generation
     """
     if GENETIC_DATA:
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
@@ -722,7 +722,7 @@ def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
                 "lambda": lambda_val,
                 "data_source": "CSV_simulation",
                 "supplementation": "4 mixed birds (South African + USA + European zoos) per generation",
-                "supplementation_sources": "PAAZA (South Africa) + AZA (USA/Canada) + EAZA (Europe)",
+                "supplementation_sources": "SA Captive (South Africa) + AZA (USA/Canada) + EAZA (Europe)",
                 "novel_alleles_total": novel_count,
                 "allele_model": "empirical (real genetic data tracks novel allele gain)",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",

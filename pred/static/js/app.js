@@ -122,8 +122,8 @@ function updateModelDescription(modelNum) {
     const descriptions = {
         1: 'Baseline scenario with all wild populations (Eastern Cape, Kruger NP, KwaZulu-Natal, Limpopo)',
         2: 'Simulates loss of Eastern Cape and KwaZulu-Natal populations',
-        3: 'Baseline plus 4 South African captive birds (PAAZA zoos) added each generation',
-        4: 'Baseline plus 10 South African captive birds (PAAZA zoos) added each generation',
+        3: 'Baseline plus 4 South African captive birds (SA captive zoos) added each generation',
+        4: 'Baseline plus 10 South African captive birds (SA captive zoos) added each generation',
         5: 'Baseline plus 4 birds from mixed captive sources (South African + USA + European zoos) each generation'
     };
 
