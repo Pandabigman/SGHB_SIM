@@ -14,6 +14,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from genetic_data import (
     load_and_process_genetic_data,
     simulate_supplementation_effect,
+    simulate_supplementation_effect_breeding,
+    simulate_mixed_source_supplementation,
+    CaptiveBreedingParams,
     calculate_observed_heterozygosity,
     calculate_expected_heterozygosity_population,
     calculate_allelic_richness,
@@ -403,20 +406,37 @@ def run_model_2(Ne, generations, lambda_val=1.0, stochastic=False):
 def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 3: Low Supplementation - Add 4 SA Captive birds per generation
-    Uses real CSV data to track actual genetic contribution
+    Uses DYNAMIC CAPTIVE BREEDING: captive population breeds each generation,
+    creating new genetic combinations via Mendelian inheritance.
     """
     if GENETIC_DATA:
-        # Use real CSV simulation with caching
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
 
-        # OPTIMIZED: Cache expensive genetic simulations (skip cache if stochastic)
-        cache_key = get_cache_key(3, 4, generations, Ne, stochastic)
+        # Configure captive breeding parameters
+        captive_params = CaptiveBreedingParams(
+            target_population_size=len(paaza_df),
+            captive_Ne=35.0,  # Estimated for PAAZA (~70 birds, managed)
+            breeding_success_rate=0.7,
+            offspring_per_pair=1.5
+        )
+
+        # Use seed for reproducibility unless stochastic
+        seed = None if stochastic else 42
+
+        # Use NEW breeding simulation (captive pop breeds each generation)
+        cache_key = get_cache_key(3, 4, generations, Ne, stochastic) + "_breeding"
         results = get_cached_simulation(
             cache_key,
-            simulate_supplementation_effect,
+            simulate_supplementation_effect_breeding,
             stochastic,
-            wild_df, paaza_df, birds_per_gen=4, generations=generations, loci_list=LOCI, base_Ne=Ne
+            wild_df, paaza_df,
+            birds_per_gen=4,
+            generations=generations,
+            loci_list=LOCI,
+            base_Ne=Ne,
+            captive_params=captive_params,
+            seed=seed
         )
 
         # Extract data
@@ -424,57 +444,38 @@ def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
         He = [r["He"] for r in results]
         Na = [r["Na"] for r in results]
         F = [r["FIS"] for r in results]
-        sample_sizes = [r["population_size"] for r in results]
         effective_Ne_vals = [r["effective_Ne"] for r in results]
+        captive_F_mean = [r.get("captive_F_mean", 0) for r in results]
 
-        # CRITICAL FIX: Keep initial wild population size separate from genetic samples
-        # The genetic simulation adds samples for tracking alleles, not census population
+        # Population dynamics with inbreeding depression
         N0 = 2500  # Fixed census size for wild population
-
-        # BUG FIX: Use drift-based F calculation like models 1-2
-        # FIS from genetic data is population structure, NOT inbreeding depression coefficient
-        # Use theoretical F from drift equation with dynamic Ne
-        t = np.arange(0, generations + 1)
-        F_array = np.zeros(len(t))
-
-        for gen in range(len(t)):
-            # Use effective Ne at this generation (increases with gene flow)
-            Ne_current = effective_Ne_vals[gen]
-            # Calculate accumulated inbreeding from drift: F(t) = 1 - (1 - 1/(2*Ne))^t
-            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
-
-        # Track supplemented birds parameters
         birds_per_gen = 4
         captive_survival_multiplier = 0.95
 
-        # CRITICAL FIX: Apply genetic rescue effect BEFORE calculating wild population dynamics
-        # Gene flow from supplementation reduces population-wide inbreeding
+        # Calculate drift-based F with dynamic Ne
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+        for gen in range(len(t)):
+            Ne_current = effective_Ne_vals[gen]
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
+
+        # Apply genetic rescue effect
         F_array_rescued = F_array.copy()
         for gen in range(len(F_array)):
             if gen > 0:
-                # Gene flow benefit proportional to cumulative supplementation
                 cumulative_birds = birds_per_gen * gen
                 total_pop_estimate = N0 + cumulative_birds
                 gene_flow_proportion = cumulative_birds / total_pop_estimate
-                # Reduce F by 50% of gene flow proportion (genetic rescue)
                 F_array_rescued[gen] = F_array[gen] * (1 - gene_flow_proportion * 0.5)
 
-        # Apply inbreeding depression to wild-born population using RESCUED F values
+        # Calculate population sizes
         N_wild = calculate_population_size_with_inbreeding(
             N0, lambda_val, F_array_rescued, stochastic=stochastic
         )
-
-        # OPTIMIZED: Use vectorized function instead of nested loops
         N_released = calculate_released_birds_optimized(
             birds_per_gen, F_array_rescued, captive_survival_multiplier
         )
-
-        # Total population = wild-born + released survivors
-        # NOTE: In reality, released birds are integrated into wild population
-        # This separation is for tracking genetic rescue contribution
         N = N_wild + N_released
-
-        t = np.arange(0, generations + 1)
 
         return {
             "model_number": 3,
@@ -488,17 +489,18 @@ def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
             "population": N.tolist(),
             "Ne": Ne,
             "effective_Ne": effective_Ne_vals,
+            "captive_F_mean": captive_F_mean,
             "initial": {"Ho": Ho[0], "He": He[0], "Na": Na[0], "N": N[0]},
             "parameters": {
                 "Ne_base": Ne,
                 "Ne_final": effective_Ne_vals[-1],
                 "N0": int(N[0]),
                 "lambda": lambda_val,
-                "data_source": "CSV_simulation",
+                "data_source": "CSV_breeding_simulation",
                 "supplementation": "4 South African captive birds per generation",
                 "supplementation_source": "SA Captive (South African Zoos and Aquaria)",
+                "breeding_model": "dynamic (Mendelian inheritance, new combinations each gen)",
                 "novel_alleles_added": len(GENETIC_DATA["novel_alleles"]["paaza"]),
-                "allele_model": "empirical (real genetic data tracks novel allele gain)",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
             },
         }
@@ -518,47 +520,57 @@ def run_model_3(Ne, generations, lambda_val=1.0, stochastic=False):
 def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 4: High Supplementation - Add 10 SA Captive birds per generation
+    Uses DYNAMIC CAPTIVE BREEDING: captive population breeds each generation,
+    creating new genetic combinations via Mendelian inheritance.
     """
     if GENETIC_DATA:
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
 
-        # OPTIMIZED: Cache expensive genetic simulations (skip cache if stochastic)
-        cache_key = get_cache_key(4, 10, generations, Ne, stochastic)
+        # Configure captive breeding parameters
+        captive_params = CaptiveBreedingParams(
+            target_population_size=len(paaza_df),
+            captive_Ne=35.0,
+            breeding_success_rate=0.7,
+            offspring_per_pair=1.5
+        )
+
+        seed = None if stochastic else 42
+
+        # Use NEW breeding simulation
+        cache_key = get_cache_key(4, 10, generations, Ne, stochastic) + "_breeding"
         results = get_cached_simulation(
             cache_key,
-            simulate_supplementation_effect,
+            simulate_supplementation_effect_breeding,
             stochastic,
-            wild_df, paaza_df, birds_per_gen=10, generations=generations, loci_list=LOCI, base_Ne=Ne
+            wild_df, paaza_df,
+            birds_per_gen=10,
+            generations=generations,
+            loci_list=LOCI,
+            base_Ne=Ne,
+            captive_params=captive_params,
+            seed=seed
         )
 
         Ho = [r["Ho"] for r in results]
         He = [r["He"] for r in results]
         Na = [r["Na"] for r in results]
         F = [r["FIS"] for r in results]
-        sample_sizes = [r["population_size"] for r in results]
         effective_Ne_vals = [r["effective_Ne"] for r in results]
+        captive_F_mean = [r.get("captive_F_mean", 0) for r in results]
 
-        # CRITICAL FIX: Keep initial wild population size separate from genetic samples
-        N0 = 2500  # Fixed census size for wild population
-
-        # BUG FIX: Use drift-based F calculation like models 1-2
-        # FIS from genetic data is population structure, NOT inbreeding depression coefficient
-        # Use theoretical F from drift equation with dynamic Ne
-        t = np.arange(0, generations + 1)
-        F_array = np.zeros(len(t))
-
-        for gen in range(len(t)):
-            # Use effective Ne at this generation (increases with gene flow)
-            Ne_current = effective_Ne_vals[gen]
-            # Calculate accumulated inbreeding from drift: F(t) = 1 - (1 - 1/(2*Ne))^t
-            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
-
-        # Track supplemented birds parameters
+        # Population dynamics
+        N0 = 2500
         birds_per_gen = 10
         captive_survival_multiplier = 0.95
 
-        # CRITICAL FIX: Apply genetic rescue effect BEFORE calculating wild population dynamics
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+        for gen in range(len(t)):
+            Ne_current = effective_Ne_vals[gen]
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
+
+        # Genetic rescue effect
         F_array_rescued = F_array.copy()
         for gen in range(len(F_array)):
             if gen > 0:
@@ -567,20 +579,13 @@ def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
                 gene_flow_proportion = cumulative_birds / total_pop_estimate
                 F_array_rescued[gen] = F_array[gen] * (1 - gene_flow_proportion * 0.5)
 
-        # Apply inbreeding depression to wild-born population using RESCUED F values
         N_wild = calculate_population_size_with_inbreeding(
             N0, lambda_val, F_array_rescued, stochastic=stochastic
         )
-
-        # OPTIMIZED: Use vectorized function instead of nested loops
         N_released = calculate_released_birds_optimized(
             birds_per_gen, F_array_rescued, captive_survival_multiplier
         )
-
-        # Total population = wild-born + released survivors
         N = N_wild + N_released
-
-        t = np.arange(0, generations + 1)
 
         return {
             "model_number": 4,
@@ -594,16 +599,17 @@ def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
             "population": N.tolist(),
             "Ne": Ne,
             "effective_Ne": effective_Ne_vals,
+            "captive_F_mean": captive_F_mean,
             "initial": {"Ho": Ho[0], "He": He[0], "Na": Na[0], "N": N[0]},
             "parameters": {
                 "Ne_base": Ne,
                 "Ne_final": effective_Ne_vals[-1],
                 "N0": int(N[0]),
                 "lambda": lambda_val,
-                "data_source": "CSV_simulation",
+                "data_source": "CSV_breeding_simulation",
                 "supplementation": "10 South African captive birds per generation",
                 "supplementation_source": "SA Captive (South African Zoos and Aquaria)",
-                "allele_model": "empirical (real genetic data tracks novel allele gain)",
+                "breeding_model": "dynamic (Mendelian inheritance, new combinations each gen)",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
             },
         }
@@ -622,11 +628,12 @@ def run_model_4(Ne, generations, lambda_val=1.0, stochastic=False):
 def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
     """
     Model 5: International Mix - Add 4 mixed birds (SA Captive/AZA/EAZA) per generation
+    Uses DYNAMIC CAPTIVE BREEDING with pooled international populations.
     """
     if GENETIC_DATA:
         wild_df = GENETIC_DATA["dataframes"]["wild_all"]
 
-        # Mix captive populations
+        # Mix captive populations (pooled breeding)
         import pandas as pd
 
         paaza_df = GENETIC_DATA["dataframes"]["paaza"]
@@ -634,18 +641,30 @@ def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
         eaza_df = GENETIC_DATA["dataframes"]["eaza"]
         mixed_captive = pd.concat([paaza_df, aza_df, eaza_df], ignore_index=True)
 
-        # OPTIMIZED: Cache expensive genetic simulations (skip cache if stochastic)
-        cache_key = get_cache_key(5, 4, generations, Ne, stochastic)
+        # Configure captive breeding for pooled international population
+        captive_params = CaptiveBreedingParams(
+            target_population_size=len(mixed_captive),
+            captive_Ne=70.0,  # Higher Ne for pooled population (~145 birds)
+            breeding_success_rate=0.7,
+            offspring_per_pair=1.5
+        )
+
+        seed = None if stochastic else 42
+
+        # Use NEW breeding simulation
+        cache_key = get_cache_key(5, 4, generations, Ne, stochastic) + "_breeding"
         results = get_cached_simulation(
             cache_key,
-            simulate_supplementation_effect,
+            simulate_supplementation_effect_breeding,
             stochastic,
             wild_df,
             mixed_captive,
             birds_per_gen=4,
             generations=generations,
             loci_list=LOCI,
-            base_Ne=Ne
+            base_Ne=Ne,
+            captive_params=captive_params,
+            seed=seed
         )
 
         Ho = [r["Ho"] for r in results]
@@ -653,27 +672,20 @@ def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
         Na = [r["Na"] for r in results]
         F = [r["FIS"] for r in results]
         effective_Ne_vals = [r["effective_Ne"] for r in results]
+        captive_F_mean = [r.get("captive_F_mean", 0) for r in results]
 
-        # CRITICAL FIX: Keep initial wild population size separate from genetic samples
-        N0 = 2500  # Fixed census size for wild population
-
-        # BUG FIX: Use drift-based F calculation like models 1-2
-        # FIS from genetic data is population structure, NOT inbreeding depression coefficient
-        # Use theoretical F from drift equation with dynamic Ne
-        t = np.arange(0, generations + 1)
-        F_array = np.zeros(len(t))
-
-        for gen in range(len(t)):
-            # Use effective Ne at this generation (increases with gene flow)
-            Ne_current = effective_Ne_vals[gen]
-            # Calculate accumulated inbreeding from drift: F(t) = 1 - (1 - 1/(2*Ne))^t
-            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
-
-        # Track supplemented birds parameters
+        # Population dynamics
+        N0 = 2500
         birds_per_gen = 4
         captive_survival_multiplier = 0.95
 
-        # CRITICAL FIX: Apply genetic rescue effect BEFORE calculating wild population dynamics
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+        for gen in range(len(t)):
+            Ne_current = effective_Ne_vals[gen]
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
+
+        # Genetic rescue effect
         F_array_rescued = F_array.copy()
         for gen in range(len(F_array)):
             if gen > 0:
@@ -682,20 +694,13 @@ def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
                 gene_flow_proportion = cumulative_birds / total_pop_estimate
                 F_array_rescued[gen] = F_array[gen] * (1 - gene_flow_proportion * 0.5)
 
-        # Apply inbreeding depression to wild-born population using RESCUED F values
         N_wild = calculate_population_size_with_inbreeding(
             N0, lambda_val, F_array_rescued, stochastic=stochastic
         )
-
-        # OPTIMIZED: Use vectorized function instead of nested loops
         N_released = calculate_released_birds_optimized(
             birds_per_gen, F_array_rescued, captive_survival_multiplier
         )
-
-        # Total population = wild-born + released survivors
         N = N_wild + N_released
-
-        t = np.arange(0, generations + 1)
 
         # Count total novel alleles
         novel_count = sum(
@@ -714,23 +719,151 @@ def run_model_5(Ne, generations, lambda_val=1.0, stochastic=False):
             "population": N.tolist(),
             "Ne": Ne,
             "effective_Ne": effective_Ne_vals,
+            "captive_F_mean": captive_F_mean,
             "initial": {"Ho": Ho[0], "He": He[0], "Na": Na[0], "N": N[0]},
             "parameters": {
                 "Ne_base": Ne,
                 "Ne_final": effective_Ne_vals[-1],
                 "N0": int(N[0]),
                 "lambda": lambda_val,
-                "data_source": "CSV_simulation",
+                "data_source": "CSV_breeding_simulation",
                 "supplementation": "4 mixed birds (South African + USA + European zoos) per generation",
                 "supplementation_sources": "SA Captive (South Africa) + AZA (USA/Canada) + EAZA (Europe)",
+                "breeding_model": "dynamic pooled (all captive sources breed together)",
                 "novel_alleles_total": novel_count,
-                "allele_model": "empirical (real genetic data tracks novel allele gain)",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
             },
         }
     else:
         return run_generic_supplementation_model(
             Ne, generations, lambda_val, birds_per_gen=4, model_num=5, source="Mixed", stochastic=stochastic
+        )
+
+
+def run_model_6(Ne, generations, lambda_val=1.0, stochastic=False):
+    """
+    Model 6: Mixed South African Sourcing
+    - 6 birds from SA Captive (breeding PAAZA population)
+    - 2 birds from KwaZulu-Natal wild (translocated, depletes source)
+    - 2 birds from Eastern Cape wild (translocated, depletes source)
+    Total: 10 birds per generation
+
+    This tests intra-South African gene flow without international logistics.
+    Wild source populations are depleted realistically.
+    """
+    if GENETIC_DATA:
+        wild_df = GENETIC_DATA["dataframes"]["wild_all"]
+        paaza_df = GENETIC_DATA["dataframes"]["paaza"]
+        kzn_df = GENETIC_DATA["dataframes"]["wild_kzn"]
+        ec_df = GENETIC_DATA["dataframes"]["wild_ec"]
+
+        # Configure captive breeding parameters
+        captive_params = CaptiveBreedingParams(
+            target_population_size=len(paaza_df),
+            captive_Ne=35.0,
+            breeding_success_rate=0.7,
+            offspring_per_pair=1.5
+        )
+
+        seed = None if stochastic else 42
+
+        # Use mixed source simulation with wild depletion
+        cache_key = get_cache_key(6, 10, generations, Ne, stochastic) + "_mixed_sa"
+        results = get_cached_simulation(
+            cache_key,
+            simulate_mixed_source_supplementation,
+            stochastic,
+            wild_df, paaza_df, kzn_df, ec_df,
+            captive_birds_per_gen=6,
+            kzn_birds_per_gen=2,
+            ec_birds_per_gen=2,
+            generations=generations,
+            loci_list=LOCI,
+            base_Ne=Ne,
+            captive_params=captive_params,
+            seed=seed
+        )
+
+        Ho = [r["Ho"] for r in results]
+        He = [r["He"] for r in results]
+        Na = [r["Na"] for r in results]
+        F = [r["FIS"] for r in results]
+        effective_Ne_vals = [r["effective_Ne"] for r in results]
+        captive_F_mean = [r.get("captive_F_mean", 0) for r in results]
+        kzn_remaining = [r.get("kzn_source_remaining", 0) for r in results]
+        ec_remaining = [r.get("ec_source_remaining", 0) for r in results]
+
+        # Population dynamics
+        N0 = 2500
+        birds_per_gen = 10  # 6 captive + 2 KZN + 2 EC
+        captive_survival_multiplier = 0.95
+
+        t = np.arange(0, generations + 1)
+        F_array = np.zeros(len(t))
+        for gen in range(len(t)):
+            Ne_current = effective_Ne_vals[gen]
+            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
+
+        # Genetic rescue effect
+        F_array_rescued = F_array.copy()
+        for gen in range(len(F_array)):
+            if gen > 0:
+                cumulative_birds = birds_per_gen * gen
+                total_pop_estimate = N0 + cumulative_birds
+                gene_flow_proportion = cumulative_birds / total_pop_estimate
+                F_array_rescued[gen] = F_array[gen] * (1 - gene_flow_proportion * 0.5)
+
+        N_wild = calculate_population_size_with_inbreeding(
+            N0, lambda_val, F_array_rescued, stochastic=stochastic
+        )
+        N_released = calculate_released_birds_optimized(
+            birds_per_gen, F_array_rescued, captive_survival_multiplier
+        )
+        N = N_wild + N_released
+
+        return {
+            "model_number": 6,
+            "model_name": "Mixed SA Source (+6 Captive +2 KZN +2 EC/gen)",
+            "generations": t.tolist(),
+            "years": (t * 26).tolist(),
+            "Ho": Ho,
+            "He": He,
+            "F": F,
+            "Na": Na,
+            "population": N.tolist(),
+            "Ne": Ne,
+            "effective_Ne": effective_Ne_vals,
+            "captive_F_mean": captive_F_mean,
+            "kzn_source_remaining": kzn_remaining,
+            "ec_source_remaining": ec_remaining,
+            "initial": {"Ho": Ho[0], "He": He[0], "Na": Na[0], "N": N[0]},
+            "parameters": {
+                "Ne_base": Ne,
+                "Ne_final": effective_Ne_vals[-1],
+                "N0": int(N[0]),
+                "lambda": lambda_val,
+                "data_source": "CSV_mixed_source_simulation",
+                "supplementation": "10 birds/gen (6 SA captive + 2 KZN wild + 2 EC wild)",
+                "supplementation_sources": {
+                    "captive": "6 from PAAZA (breeding population)",
+                    "kzn_wild": "2 from KwaZulu-Natal (translocated, depletes source)",
+                    "ec_wild": "2 from Eastern Cape (translocated, depletes source)"
+                },
+                "breeding_model": "dynamic captive + wild translocation with depletion",
+                "source_depletion": "enabled (wild sources decrease over time)",
+                "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
+            },
+        }
+    else:
+        # Fallback: Generic supplementation model
+        return run_generic_supplementation_model(
+            Ne,
+            generations,
+            lambda_val,
+            birds_per_gen=10,
+            model_num=6,
+            source="Mixed SA",
+            stochastic=stochastic,
         )
 
 
@@ -871,8 +1004,8 @@ def simulate():
             return jsonify({"error": "Generations must be between 10 and 100"}), 400
         if not 0.5 <= lambda_val <= 1.5:
             return jsonify({"error": "Lambda must be between 0.5 and 1.5"}), 400
-        if not 1 <= model <= 5:
-            return jsonify({"error": "Model must be between 1 and 5"}), 400
+        if not 1 <= model <= 6:
+            return jsonify({"error": "Model must be between 1 and 6"}), 400
 
         # Run appropriate model
         if model == 1:
@@ -885,6 +1018,8 @@ def simulate():
             results = run_model_4(Ne, generations, lambda_val, stochastic)
         elif model == 5:
             results = run_model_5(Ne, generations, lambda_val, stochastic)
+        elif model == 6:
+            results = run_model_6(Ne, generations, lambda_val, stochastic)
 
         return jsonify(results)
 

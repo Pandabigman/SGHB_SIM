@@ -6,6 +6,9 @@ Processes microsatellite CSV data to calculate real genetic metrics
 import pandas as pd
 import numpy as np
 from collections import defaultdict, Counter
+from dataclasses import dataclass, field
+from typing import Dict, Tuple, List, Optional
+from uuid import uuid4
 
 
 
@@ -345,6 +348,491 @@ def simulate_supplementation_effect(wild_df, captive_df, birds_per_gen, generati
 
     return results
 
+
+
+# DYNAMIC CAPTIVE BREEDING SIMULATION
+
+
+@dataclass
+class Bird:
+    """Represents a single diploid bird with genotype data"""
+    id: str
+    genotype: Dict[str, Optional[Tuple[float, float]]]  # {locus: (allele1, allele2) or None}
+    sex: str  # 'M' or 'F'
+    generation: int  # 0 = founder from CSV
+    origin: str  # 'PAAZA', 'AZA', 'EAZA', or 'captive_bred'
+    parents: Optional[Tuple[str, str]]  # (sire_id, dam_id) or None for founders
+    inbreeding_coefficient: float  # Individual F value
+
+
+@dataclass
+class CaptiveBreedingParams:
+    """Parameters controlling captive breeding simulation"""
+    target_population_size: int = 140
+    captive_Ne: float = 50.0
+    breeding_success_rate: float = 0.7
+    offspring_per_pair: float = 1.5
+    max_breeding_generations: int = 5  # How long a bird can breed
+
+
+@dataclass
+class CaptivePopulation:
+    """Manages a breeding captive population"""
+    birds: Dict[str, Bird]
+    pedigree: Dict[str, Tuple[str, str]]  # {bird_id: (sire_id, dam_id)}
+    current_generation: int
+    target_population_size: int
+    effective_Ne: float
+    mean_inbreeding_history: List[float] = field(default_factory=list)
+
+
+def initialize_captive_population(captive_df: pd.DataFrame, loci_list: List[str] = None) -> CaptivePopulation:
+    """
+    Initialize captive population from CSV data.
+    CSV birds become founders (generation 0).
+    """
+    if loci_list is None:
+        loci_list = LOCI
+
+    birds = {}
+
+    for idx, row in captive_df.iterrows():
+        bird_id = f"F_{row['Code']}"  # F = founder
+        origin = row['Site'] if 'Site' in row else 'Unknown'
+
+        # Extract genotype for all loci
+        genotype = {}
+        for locus in loci_list:
+            locus_idx = loci_list.index(locus)
+            col_start = 3 + (locus_idx * 2)
+
+            allele1 = row.iloc[col_start]
+            allele2 = row.iloc[col_start + 1]
+
+            # Handle missing data (0 values)
+            if allele1 == 0 or allele2 == 0 or pd.isna(allele1) or pd.isna(allele2):
+                genotype[locus] = None
+            else:
+                genotype[locus] = (float(allele1), float(allele2))
+
+        # Assign sex (alternating for founders)
+        sex = 'M' if idx % 2 == 0 else 'F'
+
+        bird = Bird(
+            id=bird_id,
+            genotype=genotype,
+            sex=sex,
+            generation=0,
+            origin=origin,
+            parents=None,
+            inbreeding_coefficient=0.0  # Founders assumed non-inbred
+        )
+        birds[bird_id] = bird
+
+    return CaptivePopulation(
+        birds=birds,
+        pedigree={},
+        current_generation=0,
+        target_population_size=len(birds),
+        effective_Ne=50.0,
+        mean_inbreeding_history=[0.0]
+    )
+
+
+def create_offspring(
+    sire: Bird,
+    dam: Bird,
+    generation: int,
+    pedigree: Dict[str, Tuple[str, str]],
+    rng: np.random.Generator,
+    loci_list: List[str] = None
+) -> Bird:
+    """
+    Create offspring via Mendelian inheritance.
+    For each locus, randomly select one allele from each parent.
+    """
+    if loci_list is None:
+        loci_list = LOCI
+
+    offspring_genotype = {}
+
+    for locus in loci_list:
+        sire_geno = sire.genotype.get(locus)
+        dam_geno = dam.genotype.get(locus)
+
+        # Handle missing data - if either parent missing, offspring missing
+        if sire_geno is None or dam_geno is None:
+            offspring_genotype[locus] = None
+        else:
+            # Mendel's Law: random allele from each parent
+            sire_allele = sire_geno[rng.integers(0, 2)]
+            dam_allele = dam_geno[rng.integers(0, 2)]
+            offspring_genotype[locus] = (sire_allele, dam_allele)
+
+    # Assign sex randomly (1:1 ratio)
+    sex = 'M' if rng.random() < 0.5 else 'F'
+
+    # Calculate inbreeding coefficient
+    # F_offspring = kinship(sire, dam) - approximate using parental F
+    parent_F_avg = (sire.inbreeding_coefficient + dam.inbreeding_coefficient) / 2
+    # Simplified: offspring F increases slightly each generation
+    offspring_F = min(parent_F_avg + 0.01, 1.0)
+
+    return Bird(
+        id=f"CB_G{generation}_{uuid4().hex[:8]}",
+        genotype=offspring_genotype,
+        sex=sex,
+        generation=generation,
+        origin='captive_bred',
+        parents=(sire.id, dam.id),
+        inbreeding_coefficient=offspring_F
+    )
+
+
+def breed_captive_population(
+    captive_pop: CaptivePopulation,
+    params: CaptiveBreedingParams,
+    rng: np.random.Generator,
+    loci_list: List[str] = None
+) -> CaptivePopulation:
+    """
+    Simulate one generation of captive breeding.
+
+    Algorithm:
+    1. Select breeding pairs (random pairing)
+    2. For each pair, produce offspring via Mendelian inheritance
+    3. Apply mortality/culling to maintain target population size
+    4. Update pedigree
+    """
+    if loci_list is None:
+        loci_list = LOCI
+
+    # Get breeding-age birds
+    males = [b for b in captive_pop.birds.values()
+             if b.sex == 'M' and (captive_pop.current_generation - b.generation) < params.max_breeding_generations]
+    females = [b for b in captive_pop.birds.values()
+               if b.sex == 'F' and (captive_pop.current_generation - b.generation) < params.max_breeding_generations]
+
+    if len(males) == 0 or len(females) == 0:
+        # No breeding possible - return as is with incremented generation
+        return CaptivePopulation(
+            birds=captive_pop.birds.copy(),
+            pedigree=captive_pop.pedigree.copy(),
+            current_generation=captive_pop.current_generation + 1,
+            target_population_size=captive_pop.target_population_size,
+            effective_Ne=captive_pop.effective_Ne,
+            mean_inbreeding_history=captive_pop.mean_inbreeding_history.copy()
+        )
+
+    # Random pairing
+    rng.shuffle(males)
+    rng.shuffle(females)
+    n_pairs = min(len(males), len(females))
+    pairs = list(zip(males[:n_pairs], females[:n_pairs]))
+
+    # Produce offspring
+    offspring = []
+    new_pedigree = captive_pop.pedigree.copy()
+
+    for sire, dam in pairs:
+        if rng.random() < params.breeding_success_rate:
+            n_offspring = rng.poisson(params.offspring_per_pair)
+            for _ in range(n_offspring):
+                chick = create_offspring(
+                    sire, dam,
+                    captive_pop.current_generation + 1,
+                    new_pedigree,
+                    rng, loci_list
+                )
+                offspring.append(chick)
+                new_pedigree[chick.id] = (sire.id, dam.id)
+
+    # Combine existing birds and offspring
+    all_birds = list(captive_pop.birds.values()) + offspring
+
+    # Cull to maintain target population size (remove oldest first)
+    if len(all_birds) > params.target_population_size:
+        # Sort by generation (oldest first), then randomly within generation
+        all_birds.sort(key=lambda b: (b.generation, rng.random()))
+        # Keep youngest birds up to target size
+        all_birds = all_birds[-params.target_population_size:]
+
+    # Calculate mean inbreeding
+    mean_F = np.mean([b.inbreeding_coefficient for b in all_birds]) if all_birds else 0.0
+    new_history = captive_pop.mean_inbreeding_history + [mean_F]
+
+    return CaptivePopulation(
+        birds={b.id: b for b in all_birds},
+        pedigree=new_pedigree,
+        current_generation=captive_pop.current_generation + 1,
+        target_population_size=params.target_population_size,
+        effective_Ne=captive_pop.effective_Ne,
+        mean_inbreeding_history=new_history
+    )
+
+
+def sample_supplementation_birds(
+    captive_pop: CaptivePopulation,
+    n_birds: int,
+    rng: np.random.Generator
+) -> List[Bird]:
+    """
+    Sample n birds from current captive population for supplementation.
+    Samples WITHOUT replacement, preferring birds with lower inbreeding.
+    """
+    available_birds = list(captive_pop.birds.values())
+
+    if n_birds >= len(available_birds):
+        return available_birds.copy()
+
+    # Weight selection by inverse inbreeding (less inbred = more likely selected)
+    weights = np.array([1.0 / (1.0 + b.inbreeding_coefficient) for b in available_birds])
+    weights /= weights.sum()
+
+    selected_indices = rng.choice(
+        len(available_birds),
+        size=n_birds,
+        replace=False,
+        p=weights
+    )
+
+    return [available_birds[i] for i in selected_indices]
+
+
+def birds_to_dataframe(birds: List[Bird], loci_list: List[str] = None) -> pd.DataFrame:
+    """
+    Convert list of Bird objects back to DataFrame format for compatibility
+    with existing genetic calculation functions.
+    """
+    if loci_list is None:
+        loci_list = LOCI
+
+    if not birds:
+        return pd.DataFrame()
+
+    rows = []
+
+    for bird in birds:
+        row = {
+            'Code': bird.id,
+            'Site': bird.origin,
+            'Status': 'Captive'
+        }
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+
+    # Add genotype columns in the correct positions
+    for locus_idx, locus in enumerate(loci_list):
+        col1_values = []
+        col2_values = []
+
+        for bird in birds:
+            geno = bird.genotype.get(locus)
+            if geno is None:
+                col1_values.append(0)
+                col2_values.append(0)
+            else:
+                col1_values.append(geno[0])
+                col2_values.append(geno[1])
+
+        # Insert at correct column positions (after Code, Site, Status)
+        df.insert(3 + locus_idx * 2, f'Locus{locus_idx}_1', col1_values)
+        df.insert(3 + locus_idx * 2 + 1, f'Locus{locus_idx}_2', col2_values)
+
+    return df
+
+
+def simulate_supplementation_effect_breeding(
+    wild_df: pd.DataFrame,
+    initial_captive_df: pd.DataFrame,
+    birds_per_gen: int,
+    generations: int,
+    loci_list: List[str] = None,
+    base_Ne: float = 500,
+    captive_params: CaptiveBreedingParams = None,
+    seed: int = None
+) -> List[Dict]:
+    """
+    Simulate supplementation with dynamic captive breeding population.
+
+    Key difference from original:
+    - Captive population breeds each generation, creating new genetic combinations
+    - Supplementation birds are sampled from CURRENT captive population
+    - Tracks captive population genetics separately
+    """
+    if loci_list is None:
+        loci_list = LOCI
+
+    rng = np.random.default_rng(seed)
+
+    if captive_params is None:
+        captive_params = CaptiveBreedingParams()
+
+    # Initialize captive population from CSV (founders)
+    captive_pop = initialize_captive_population(initial_captive_df, loci_list)
+
+    results = []
+    current_wild_population = wild_df.copy()
+
+    for gen in range(generations + 1):
+        # Calculate current wild population metrics
+        Ho = calculate_observed_heterozygosity(current_wild_population, loci_list)
+        He = calculate_expected_heterozygosity_population(current_wild_population, loci_list)
+        Na = calculate_allelic_richness(current_wild_population, loci_list)
+        FIS = calculate_fis(Ho, He)
+        pop_size = len(current_wild_population)
+
+        # Calculate effective Ne with gene flow
+        cumulative_immigrants = birds_per_gen * gen
+        effective_Ne = base_Ne + (cumulative_immigrants * 0.5)
+
+        # Track captive population metrics
+        captive_birds_list = list(captive_pop.birds.values())
+        captive_F_mean = np.mean([b.inbreeding_coefficient for b in captive_birds_list]) if captive_birds_list else 0.0
+
+        results.append({
+            'generation': gen,
+            'Ho': Ho,
+            'He': He,
+            'Na': Na,
+            'FIS': FIS,
+            'population_size': pop_size,
+            'effective_Ne': effective_Ne,
+            'captive_F_mean': captive_F_mean,
+            'captive_pop_size': len(captive_pop.birds)
+        })
+
+        # Advance simulation (except at last generation)
+        if gen < generations:
+            # 1. Breed captive population for next generation
+            captive_pop = breed_captive_population(captive_pop, captive_params, rng, loci_list)
+
+            # 2. Sample supplementation birds from CURRENT captive population
+            supplementation_birds = sample_supplementation_birds(captive_pop, birds_per_gen, rng)
+
+            # 3. Convert to DataFrame and add to wild population
+            supplementation_df = birds_to_dataframe(supplementation_birds, loci_list)
+            if len(supplementation_df) > 0:
+                current_wild_population = pd.concat(
+                    [current_wild_population, supplementation_df],
+                    ignore_index=True
+                )
+
+    return results
+
+
+def simulate_mixed_source_supplementation(
+    wild_df: pd.DataFrame,
+    captive_df: pd.DataFrame,
+    kzn_df: pd.DataFrame,
+    ec_df: pd.DataFrame,
+    captive_birds_per_gen: int,
+    kzn_birds_per_gen: int,
+    ec_birds_per_gen: int,
+    generations: int,
+    loci_list: List[str] = None,
+    base_Ne: float = 500,
+    captive_params: CaptiveBreedingParams = None,
+    seed: int = None
+) -> List[Dict]:
+    """
+    Model 6: Mixed source supplementation with wild population depletion.
+
+    Sources per generation:
+    - captive_birds_per_gen from breeding PAAZA population
+    - kzn_birds_per_gen from KZN wild (depletes source)
+    - ec_birds_per_gen from E Cape wild (depletes source)
+
+    Wild source populations are sampled WITHOUT replacement, realistically
+    modeling removal of birds from already-threatened source populations.
+    """
+    if loci_list is None:
+        loci_list = LOCI
+
+    rng = np.random.default_rng(seed)
+
+    if captive_params is None:
+        captive_params = CaptiveBreedingParams()
+
+    # Initialize captive breeding population
+    captive_pop = initialize_captive_population(captive_df, loci_list)
+
+    # Create mutable copies of wild source populations (for depletion)
+    kzn_source = kzn_df.copy()
+    ec_source = ec_df.copy()
+
+    results = []
+    current_wild_population = wild_df.copy()
+
+    total_birds_per_gen = captive_birds_per_gen + kzn_birds_per_gen + ec_birds_per_gen
+
+    for gen in range(generations + 1):
+        # Calculate current wild population metrics
+        Ho = calculate_observed_heterozygosity(current_wild_population, loci_list)
+        He = calculate_expected_heterozygosity_population(current_wild_population, loci_list)
+        Na = calculate_allelic_richness(current_wild_population, loci_list)
+        FIS = calculate_fis(Ho, He)
+        pop_size = len(current_wild_population)
+
+        # Calculate effective Ne with gene flow
+        cumulative_immigrants = total_birds_per_gen * gen
+        effective_Ne = base_Ne + (cumulative_immigrants * 0.5)
+
+        # Track captive and source population metrics
+        captive_birds_list = list(captive_pop.birds.values())
+        captive_F_mean = np.mean([b.inbreeding_coefficient for b in captive_birds_list]) if captive_birds_list else 0.0
+
+        results.append({
+            'generation': gen,
+            'Ho': Ho,
+            'He': He,
+            'Na': Na,
+            'FIS': FIS,
+            'population_size': pop_size,
+            'effective_Ne': effective_Ne,
+            'captive_F_mean': captive_F_mean,
+            'captive_pop_size': len(captive_pop.birds),
+            'kzn_source_remaining': len(kzn_source),
+            'ec_source_remaining': len(ec_source)
+        })
+
+        # Advance simulation (except at last generation)
+        if gen < generations:
+            supplementation_dfs = []
+
+            # 1. Breed captive population and sample
+            captive_pop = breed_captive_population(captive_pop, captive_params, rng, loci_list)
+            captive_birds = sample_supplementation_birds(captive_pop, captive_birds_per_gen, rng)
+            captive_sample_df = birds_to_dataframe(captive_birds, loci_list)
+            if len(captive_sample_df) > 0:
+                supplementation_dfs.append(captive_sample_df)
+
+            # 2. Sample from KZN wild (with depletion)
+            n_kzn = min(kzn_birds_per_gen, len(kzn_source))
+            if n_kzn > 0:
+                kzn_sample = kzn_source.sample(n=n_kzn, replace=False)
+                supplementation_dfs.append(kzn_sample)
+                # Remove sampled birds from source (depletion)
+                kzn_source = kzn_source.drop(kzn_sample.index)
+
+            # 3. Sample from E Cape wild (with depletion)
+            n_ec = min(ec_birds_per_gen, len(ec_source))
+            if n_ec > 0:
+                ec_sample = ec_source.sample(n=n_ec, replace=False)
+                supplementation_dfs.append(ec_sample)
+                # Remove sampled birds from source (depletion)
+                ec_source = ec_source.drop(ec_sample.index)
+
+            # Combine all supplementation sources
+            if supplementation_dfs:
+                combined_supplementation = pd.concat(supplementation_dfs, ignore_index=True)
+                current_wild_population = pd.concat(
+                    [current_wild_population, combined_supplementation],
+                    ignore_index=True
+                )
+
+    return results
 
 
 # SUMMARY STATISTICS
