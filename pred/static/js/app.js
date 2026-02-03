@@ -21,7 +21,8 @@ const MODEL_COLORS = {
     2: '#dc2626',  // Red
     3: '#16a34a',  // Green
     4: '#9333ea',  // Purple
-    5: '#ea580c'   // Orange
+    5: '#ea580c',  // Orange
+    6: '#0d9488'   // Teal
 };
 
 // INITIALIZATION
@@ -124,7 +125,8 @@ function updateModelDescription(modelNum) {
         2: 'Simulates loss of Eastern Cape and KwaZulu-Natal populations',
         3: 'Baseline plus 4 South African captive birds (SA captive zoos) added each generation',
         4: 'Baseline plus 10 South African captive birds (SA captive zoos) added each generation',
-        5: 'Baseline plus 4 birds from mixed captive sources (South African + USA + European zoos) each generation'
+        5: 'Baseline plus 4 birds from mixed captive sources (South African + USA + European zoos) each generation',
+        6: 'Mixed SA sourcing: 6 captive + 2 KZN wild + 2 EC wild birds per generation (wild sources deplete over time)'
     };
 
     document.getElementById('model-description').textContent = descriptions[modelNum];
