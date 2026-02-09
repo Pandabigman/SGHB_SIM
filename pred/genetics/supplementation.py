@@ -182,18 +182,20 @@ def simulate_mixed_source_supplementation(
     loci_list: List[str] = None,
     base_Ne: float = 500,
     captive_params: CaptiveBreedingParams = None,
+    kzn_params: CaptiveBreedingParams = None,
+    ec_params: CaptiveBreedingParams = None,
     seed: int = None
 ) -> List[Dict]:
     """
-    Model 6: Mixed source supplementation with wild population depletion.
+    Model 6: Mixed source supplementation with breeding wild populations.
 
     Sources per generation:
     - captive_birds_per_gen from breeding PAAZA population
-    - kzn_birds_per_gen from KZN wild (depletes source)
-    - ec_birds_per_gen from E Cape wild (depletes source)
+    - kzn_birds_per_gen from breeding KZN wild population
+    - ec_birds_per_gen from breeding EC wild population
 
-    Wild source populations are sampled WITHOUT replacement, realistically
-    modeling removal of birds from already-threatened source populations.
+    All source populations breed each generation via Mendelian inheritance,
+    producing new recombinant genotypes over time.
     """
     if loci_list is None:
         loci_list = LOCI
@@ -206,9 +208,32 @@ def simulate_mixed_source_supplementation(
     # Initialize captive breeding population
     captive_pop = initialize_captive_population(captive_df, loci_list)
 
-    # Create mutable copies of wild source populations (for depletion)
-    kzn_source = kzn_df.copy()
-    ec_source = ec_df.copy()
+    # Initialize KZN and EC as breeding populations
+    if kzn_params is None:
+        kzn_params = CaptiveBreedingParams(
+            target_population_size=max(len(kzn_df), 50),
+            captive_Ne=15.0,
+            breeding_success_rate=0.5,
+            offspring_per_pair=1.2
+        )
+    if ec_params is None:
+        ec_params = CaptiveBreedingParams(
+            target_population_size=max(len(ec_df), 30),
+            captive_Ne=10.0,
+            breeding_success_rate=0.5,
+            offspring_per_pair=1.2
+        )
+
+    kzn_pop = initialize_captive_population(
+        kzn_df, loci_list, id_prefix='FK',
+        effective_Ne=kzn_params.captive_Ne,
+        target_population_size=kzn_params.target_population_size
+    )
+    ec_pop = initialize_captive_population(
+        ec_df, loci_list, id_prefix='FE',
+        effective_Ne=ec_params.captive_Ne,
+        target_population_size=ec_params.target_population_size
+    )
 
     results = []
     current_wild_population = wild_df.copy()
@@ -231,6 +256,12 @@ def simulate_mixed_source_supplementation(
         captive_birds_list = list(captive_pop.birds.values())
         captive_F_mean = np.mean([b.inbreeding_coefficient for b in captive_birds_list]) if captive_birds_list else 0.0
 
+        kzn_birds_list = list(kzn_pop.birds.values())
+        kzn_F_mean = np.mean([b.inbreeding_coefficient for b in kzn_birds_list]) if kzn_birds_list else 0.0
+
+        ec_birds_list = list(ec_pop.birds.values())
+        ec_F_mean = np.mean([b.inbreeding_coefficient for b in ec_birds_list]) if ec_birds_list else 0.0
+
         results.append({
             'generation': gen,
             'Ho': Ho,
@@ -240,7 +271,11 @@ def simulate_mixed_source_supplementation(
             'population_size': pop_size,
             'effective_Ne': effective_Ne,
             'captive_F_mean': captive_F_mean,
-            'captive_pop_size': len(captive_pop.birds)
+            'captive_pop_size': len(captive_pop.birds),
+            'kzn_F_mean': kzn_F_mean,
+            'kzn_pop_size': len(kzn_pop.birds),
+            'ec_F_mean': ec_F_mean,
+            'ec_pop_size': len(ec_pop.birds),
         })
 
         # Advance simulation (except at last generation)
@@ -254,15 +289,27 @@ def simulate_mixed_source_supplementation(
             if len(captive_sample_df) > 0:
                 supplementation_dfs.append(captive_sample_df)
 
-            # 2. Sample from KZN wild (with replacement — source assumed infinite)
-            if kzn_birds_per_gen > 0 and len(kzn_source) > 0:
-                kzn_sample = kzn_source.sample(n=kzn_birds_per_gen, replace=True)
-                supplementation_dfs.append(kzn_sample)
+            # 2. Breed KZN wild population and sample
+            kzn_pop = breed_captive_population(
+                kzn_pop, kzn_params, rng, loci_list,
+                origin='KwaZulu-Natal', id_prefix='KZN'
+            )
+            if kzn_birds_per_gen > 0 and len(kzn_pop.birds) > 0:
+                kzn_birds = sample_supplementation_birds(kzn_pop, kzn_birds_per_gen, rng)
+                kzn_sample_df = birds_to_dataframe(kzn_birds, loci_list)
+                if len(kzn_sample_df) > 0:
+                    supplementation_dfs.append(kzn_sample_df)
 
-            # 3. Sample from E Cape wild (with replacement — source assumed infinite)
-            if ec_birds_per_gen > 0 and len(ec_source) > 0:
-                ec_sample = ec_source.sample(n=ec_birds_per_gen, replace=True)
-                supplementation_dfs.append(ec_sample)
+            # 3. Breed EC wild population and sample
+            ec_pop = breed_captive_population(
+                ec_pop, ec_params, rng, loci_list,
+                origin='Eastern Cape', id_prefix='EC'
+            )
+            if ec_birds_per_gen > 0 and len(ec_pop.birds) > 0:
+                ec_birds = sample_supplementation_birds(ec_pop, ec_birds_per_gen, rng)
+                ec_sample_df = birds_to_dataframe(ec_birds, loci_list)
+                if len(ec_sample_df) > 0:
+                    supplementation_dfs.append(ec_sample_df)
 
             # Combine all supplementation sources
             if supplementation_dfs:

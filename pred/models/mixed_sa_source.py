@@ -52,11 +52,25 @@ class MixedSASourceModel(BaseModel):
             offspring_per_pair=1.5
         )
 
+        # Configure wild source breeding parameters
+        kzn_params = CaptiveBreedingParams(
+            target_population_size=max(len(kzn_df), 50),
+            captive_Ne=15.0,
+            breeding_success_rate=0.5,
+            offspring_per_pair=1.2
+        )
+        ec_params = CaptiveBreedingParams(
+            target_population_size=max(len(ec_df), 30),
+            captive_Ne=10.0,
+            breeding_success_rate=0.5,
+            offspring_per_pair=1.2
+        )
+
         seed = None if stochastic else 42
         birds_per_gen = 10  # 6 captive + 2 KZN + 2 EC
 
         # Use mixed source simulation with caching
-        cache_key = get_cache_key(6, birds_per_gen, generations, Ne, stochastic) + "_mixed_sa"
+        cache_key = get_cache_key(6, birds_per_gen, generations, Ne, stochastic) + "_mixed_sa_breeding"
         results = get_cached_simulation(
             cache_key,
             simulate_mixed_source_supplementation,
@@ -69,6 +83,8 @@ class MixedSASourceModel(BaseModel):
             loci_list=LOCI,
             base_Ne=Ne,
             captive_params=captive_params,
+            kzn_params=kzn_params,
+            ec_params=ec_params,
             seed=seed
         )
 
@@ -79,6 +95,8 @@ class MixedSASourceModel(BaseModel):
         F = [r["FIS"] for r in results]
         effective_Ne_vals = [r["effective_Ne"] for r in results]
         captive_F_mean = [r.get("captive_F_mean", 0) for r in results]
+        kzn_F_mean = [r.get("kzn_F_mean", 0) for r in results]
+        ec_F_mean = [r.get("ec_F_mean", 0) for r in results]
 
         # Population dynamics
         N0 = 2500
@@ -116,14 +134,16 @@ class MixedSASourceModel(BaseModel):
                 "supplementation": "10 birds/gen (6 SA captive + 2 KZN wild + 2 EC wild)",
                 "supplementation_sources": {
                     "captive": "6 from PAAZA (breeding population)",
-                    "kzn_wild": "2 from KwaZulu-Natal (translocated)",
-                    "ec_wild": "2 from Eastern Cape (translocated)"
+                    "kzn_wild": "2 from KwaZulu-Natal (breeding wild population)",
+                    "ec_wild": "2 from Eastern Cape (breeding wild population)"
                 },
-                "breeding_model": "dynamic captive + wild translocation",
+                "breeding_model": "dynamic captive + dynamic wild breeding",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
             },
             effective_Ne=effective_Ne_vals,
             captive_F_mean=captive_F_mean,
+            kzn_F_mean=kzn_F_mean,
+            ec_F_mean=ec_F_mean,
         )
 
     def _run_generic(self, Ne, generations, lambda_val, stochastic):

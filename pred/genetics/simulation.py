@@ -11,7 +11,13 @@ from .constants import LOCI
 from .classes import Bird, CaptiveBreedingParams, CaptivePopulation
 
 
-def initialize_captive_population(captive_df: pd.DataFrame, loci_list: List[str] = None) -> CaptivePopulation:
+def initialize_captive_population(
+    captive_df: pd.DataFrame,
+    loci_list: List[str] = None,
+    id_prefix: str = 'F',
+    effective_Ne: float = 50.0,
+    target_population_size: int = None
+) -> CaptivePopulation:
     """
     Initialize captive population from CSV data.
     CSV birds become founders (generation 0).
@@ -22,7 +28,7 @@ def initialize_captive_population(captive_df: pd.DataFrame, loci_list: List[str]
     birds = {}
 
     for idx, row in captive_df.iterrows():
-        bird_id = f"F_{row['Code']}"  # F = founder
+        bird_id = f"{id_prefix}_{row['Code']}"
         origin = row['Site'] if 'Site' in row else 'Unknown'
 
         # Extract genotype for all loci
@@ -58,8 +64,8 @@ def initialize_captive_population(captive_df: pd.DataFrame, loci_list: List[str]
         birds=birds,
         pedigree={},
         current_generation=0,
-        target_population_size=len(birds),
-        effective_Ne=50.0,
+        target_population_size=target_population_size if target_population_size is not None else len(birds),
+        effective_Ne=effective_Ne,
         mean_inbreeding_history=[0.0]
     )
 
@@ -70,7 +76,9 @@ def create_offspring(
     generation: int,
     pedigree: Dict[str, Tuple[str, str]],
     rng: np.random.Generator,
-    loci_list: List[str] = None
+    loci_list: List[str] = None,
+    origin: str = 'captive_bred',
+    id_prefix: str = 'CB'
 ) -> Bird:
     """
     Create offspring via Mendelian inheritance.
@@ -104,11 +112,11 @@ def create_offspring(
     offspring_F = min(parent_F_avg + 0.01, 1.0)
 
     return Bird(
-        id=f"CB_G{generation}_{uuid4().hex[:8]}",
+        id=f"{id_prefix}_G{generation}_{uuid4().hex[:8]}",
         genotype=offspring_genotype,
         sex=sex,
         generation=generation,
-        origin='captive_bred',
+        origin=origin,
         parents=(sire.id, dam.id),
         inbreeding_coefficient=offspring_F
     )
@@ -118,7 +126,9 @@ def breed_captive_population(
     captive_pop: CaptivePopulation,
     params: CaptiveBreedingParams,
     rng: np.random.Generator,
-    loci_list: List[str] = None
+    loci_list: List[str] = None,
+    origin: str = 'captive_bred',
+    id_prefix: str = 'CB'
 ) -> CaptivePopulation:
     """
     Simulate one generation of captive breeding.
@@ -167,7 +177,8 @@ def breed_captive_population(
                     sire, dam,
                     captive_pop.current_generation + 1,
                     new_pedigree,
-                    rng, loci_list
+                    rng, loci_list,
+                    origin=origin, id_prefix=id_prefix
                 )
                 offspring.append(chick)
                 new_pedigree[chick.id] = (sire.id, dam.id)
