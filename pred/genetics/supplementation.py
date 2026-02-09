@@ -122,6 +122,7 @@ def simulate_supplementation_effect_breeding(
 
     results = []
     current_wild_population = wild_df.copy()
+    wild_pop_size = len(wild_df)  # Carrying capacity
 
     for gen in range(generations + 1):
         # Calculate current wild population metrics
@@ -153,19 +154,40 @@ def simulate_supplementation_effect_breeding(
 
         # Advance simulation (except at last generation)
         if gen < generations:
-            # 1. Breed captive population for next generation
+            # 1. DRIFT: Wright-Fisher generational turnover
+            #    Resample wild population WITH replacement — models random
+            #    reproductive success. Some individuals contribute multiple
+            #    offspring, others contribute none (die without reproducing).
+            #    Rare alleles can be lost stochastically.
+            drift_indices = rng.choice(
+                len(current_wild_population),
+                size=wild_pop_size,
+                replace=True
+            )
+            current_wild_population = current_wild_population.iloc[drift_indices].reset_index(drop=True)
+
+            # 2. Breed captive population for next generation
             captive_pop = breed_captive_population(captive_pop, captive_params, rng, loci_list)
 
-            # 2. Sample supplementation birds from CURRENT captive population
+            # 3. Sample supplementation birds from CURRENT captive population
             supplementation_birds = sample_supplementation_birds(captive_pop, birds_per_gen, rng)
 
-            # 3. Convert to DataFrame and add to wild population
+            # 4. Add supplementation birds to post-drift wild population
             supplementation_df = birds_to_dataframe(supplementation_birds, loci_list)
             if len(supplementation_df) > 0:
                 current_wild_population = pd.concat(
                     [current_wild_population, supplementation_df],
                     ignore_index=True
                 )
+
+            # 5. Trim to carrying capacity — supplementation replaces natural deaths
+            if len(current_wild_population) > wild_pop_size:
+                trim_indices = rng.choice(
+                    len(current_wild_population),
+                    size=wild_pop_size,
+                    replace=False
+                )
+                current_wild_population = current_wild_population.iloc[trim_indices].reset_index(drop=True)
 
     return results
 
@@ -237,6 +259,7 @@ def simulate_mixed_source_supplementation(
 
     results = []
     current_wild_population = wild_df.copy()
+    wild_pop_size = len(wild_df)  # Carrying capacity
 
     total_birds_per_gen = captive_birds_per_gen + kzn_birds_per_gen + ec_birds_per_gen
 
@@ -280,16 +303,24 @@ def simulate_mixed_source_supplementation(
 
         # Advance simulation (except at last generation)
         if gen < generations:
+            # 1. DRIFT: Wright-Fisher generational turnover
+            drift_indices = rng.choice(
+                len(current_wild_population),
+                size=wild_pop_size,
+                replace=True
+            )
+            current_wild_population = current_wild_population.iloc[drift_indices].reset_index(drop=True)
+
             supplementation_dfs = []
 
-            # 1. Breed captive population and sample
+            # 2. Breed captive population and sample
             captive_pop = breed_captive_population(captive_pop, captive_params, rng, loci_list)
             captive_birds = sample_supplementation_birds(captive_pop, captive_birds_per_gen, rng)
             captive_sample_df = birds_to_dataframe(captive_birds, loci_list)
             if len(captive_sample_df) > 0:
                 supplementation_dfs.append(captive_sample_df)
 
-            # 2. Breed KZN wild population and sample
+            # 3. Breed KZN wild population and sample
             kzn_pop = breed_captive_population(
                 kzn_pop, kzn_params, rng, loci_list,
                 origin='KwaZulu-Natal', id_prefix='KZN'
@@ -300,7 +331,7 @@ def simulate_mixed_source_supplementation(
                 if len(kzn_sample_df) > 0:
                     supplementation_dfs.append(kzn_sample_df)
 
-            # 3. Breed EC wild population and sample
+            # 4. Breed EC wild population and sample
             ec_pop = breed_captive_population(
                 ec_pop, ec_params, rng, loci_list,
                 origin='Eastern Cape', id_prefix='EC'
@@ -311,12 +342,21 @@ def simulate_mixed_source_supplementation(
                 if len(ec_sample_df) > 0:
                     supplementation_dfs.append(ec_sample_df)
 
-            # Combine all supplementation sources
+            # 5. Combine all supplementation sources
             if supplementation_dfs:
                 combined_supplementation = pd.concat(supplementation_dfs, ignore_index=True)
                 current_wild_population = pd.concat(
                     [current_wild_population, combined_supplementation],
                     ignore_index=True
                 )
+
+            # 6. Trim to carrying capacity — supplementation replaces natural deaths
+            if len(current_wild_population) > wild_pop_size:
+                trim_indices = rng.choice(
+                    len(current_wild_population),
+                    size=wild_pop_size,
+                    replace=False
+                )
+                current_wild_population = current_wild_population.iloc[trim_indices].reset_index(drop=True)
 
     return results

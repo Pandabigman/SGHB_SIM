@@ -24,7 +24,7 @@ def parse_microsatellite_csv(csv_path):
         'KwaZulu-Natal province': 'KwaZulu-Natal',
         'Limpopo province': 'Limpopo'
     }
-    df['Site'] = df['Site'].replace(site_mapping)
+    df['Site'] = df['Site'].str.strip().replace(site_mapping)
 
     return df
 
