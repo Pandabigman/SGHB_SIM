@@ -240,9 +240,7 @@ def simulate_mixed_source_supplementation(
             'population_size': pop_size,
             'effective_Ne': effective_Ne,
             'captive_F_mean': captive_F_mean,
-            'captive_pop_size': len(captive_pop.birds),
-            'kzn_source_remaining': len(kzn_source),
-            'ec_source_remaining': len(ec_source)
+            'captive_pop_size': len(captive_pop.birds)
         })
 
         # Advance simulation (except at last generation)
@@ -256,21 +254,15 @@ def simulate_mixed_source_supplementation(
             if len(captive_sample_df) > 0:
                 supplementation_dfs.append(captive_sample_df)
 
-            # 2. Sample from KZN wild (with depletion)
-            n_kzn = min(kzn_birds_per_gen, len(kzn_source))
-            if n_kzn > 0:
-                kzn_sample = kzn_source.sample(n=n_kzn, replace=False)
+            # 2. Sample from KZN wild (with replacement — source assumed infinite)
+            if kzn_birds_per_gen > 0 and len(kzn_source) > 0:
+                kzn_sample = kzn_source.sample(n=kzn_birds_per_gen, replace=True)
                 supplementation_dfs.append(kzn_sample)
-                # Remove sampled birds from source (depletion)
-                kzn_source = kzn_source.drop(kzn_sample.index)
 
-            # 3. Sample from E Cape wild (with depletion)
-            n_ec = min(ec_birds_per_gen, len(ec_source))
-            if n_ec > 0:
-                ec_sample = ec_source.sample(n=n_ec, replace=False)
+            # 3. Sample from E Cape wild (with replacement — source assumed infinite)
+            if ec_birds_per_gen > 0 and len(ec_source) > 0:
+                ec_sample = ec_source.sample(n=ec_birds_per_gen, replace=True)
                 supplementation_dfs.append(ec_sample)
-                # Remove sampled birds from source (depletion)
-                ec_source = ec_source.drop(ec_sample.index)
 
             # Combine all supplementation sources
             if supplementation_dfs:

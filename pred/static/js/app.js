@@ -126,7 +126,7 @@ function updateModelDescription(modelNum) {
         3: 'Baseline plus 4 South African captive birds (SA captive zoos) added each generation',
         4: 'Baseline plus 10 South African captive birds (SA captive zoos) added each generation',
         5: 'Baseline plus 4 birds from mixed captive sources (South African + USA + European zoos) each generation',
-        6: 'Mixed SA sourcing: 6 captive + 2 KZN wild + 2 EC wild birds per generation (wild sources deplete over time)'
+        6: 'Mixed SA sourcing: 6 captive + 2 KZN wild + 2 EC wild birds per generation'
     };
 
     document.getElementById('model-description').textContent = descriptions[modelNum];

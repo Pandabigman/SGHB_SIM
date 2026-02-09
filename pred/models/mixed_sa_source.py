@@ -1,5 +1,5 @@
 """
-Model 6: Mixed South African Sourcing with wild population depletion.
+Model 6: Mixed South African Sourcing (captive + wild translocation).
 """
 
 import numpy as np
@@ -25,12 +25,12 @@ class MixedSASourceModel(BaseModel):
 
     def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None):
         """
-        Run mixed SA source model with wild population depletion.
+        Run mixed SA source model.
 
         Sources per generation:
         - 6 birds from SA Captive (breeding PAAZA population)
-        - 2 birds from KwaZulu-Natal wild (translocated, depletes source)
-        - 2 birds from Eastern Cape wild (translocated, depletes source)
+        - 2 birds from KwaZulu-Natal wild (translocated)
+        - 2 birds from Eastern Cape wild (translocated)
         """
         if genetic_data:
             return self._run_with_csv_data(Ne, generations, lambda_val, stochastic, genetic_data)
@@ -38,7 +38,7 @@ class MixedSASourceModel(BaseModel):
             return self._run_generic(Ne, generations, lambda_val, stochastic)
 
     def _run_with_csv_data(self, Ne, generations, lambda_val, stochastic, genetic_data):
-        """Run model using real CSV data with wild depletion."""
+        """Run model using real CSV data."""
         wild_df = genetic_data["dataframes"]["wild_all"]
         paaza_df = genetic_data["dataframes"]["paaza"]
         kzn_df = genetic_data["dataframes"]["wild_kzn"]
@@ -79,8 +79,6 @@ class MixedSASourceModel(BaseModel):
         F = [r["FIS"] for r in results]
         effective_Ne_vals = [r["effective_Ne"] for r in results]
         captive_F_mean = [r.get("captive_F_mean", 0) for r in results]
-        kzn_remaining = [r.get("kzn_source_remaining", 0) for r in results]
-        ec_remaining = [r.get("ec_source_remaining", 0) for r in results]
 
         # Population dynamics
         N0 = 2500
@@ -118,17 +116,14 @@ class MixedSASourceModel(BaseModel):
                 "supplementation": "10 birds/gen (6 SA captive + 2 KZN wild + 2 EC wild)",
                 "supplementation_sources": {
                     "captive": "6 from PAAZA (breeding population)",
-                    "kzn_wild": "2 from KwaZulu-Natal (translocated, depletes source)",
-                    "ec_wild": "2 from Eastern Cape (translocated, depletes source)"
+                    "kzn_wild": "2 from KwaZulu-Natal (translocated)",
+                    "ec_wild": "2 from Eastern Cape (translocated)"
                 },
-                "breeding_model": "dynamic captive + wild translocation with depletion",
-                "source_depletion": "enabled (wild sources decrease over time)",
+                "breeding_model": "dynamic captive + wild translocation",
                 "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)",
             },
             effective_Ne=effective_Ne_vals,
             captive_F_mean=captive_F_mean,
-            kzn_source_remaining=kzn_remaining,
-            ec_source_remaining=ec_remaining,
         )
 
     def _run_generic(self, Ne, generations, lambda_val, stochastic):
