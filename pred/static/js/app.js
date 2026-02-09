@@ -8,7 +8,7 @@
 const state = {
     currentModel: 1,
     Ne: 500,
-    generations: 50,
+    generations: 30,
     lambda: 1.00,
     stochastic: false,
     results: null,
