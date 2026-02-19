@@ -86,13 +86,13 @@ class InternationalMixModel(BaseModel):
         captive_survival_multiplier = 0.95
 
         t = np.arange(0, generations + 1)
-        F_array = np.zeros(len(t))
-        for gen in range(len(t)):
-            Ne_current = effective_Ne_vals[gen]
-            F_array[gen] = 1 - np.power(1 - 1 / (2 * Ne_current), gen)
 
-        # Apply genetic rescue effect
-        F_array_rescued = calculate_genetic_rescue_effect(F_array, birds_per_gen, N0)
+        # Use delta-FIS from genetic simulation: additional inbreeding above baseline.
+        # Clamped at 0 — negative delta (FIS improvement) gives no extra depression.
+        # Genetic rescue is already embedded in the FIS trajectory.
+        fis_baseline = F[0]
+        F_array = np.maximum(np.array(F) - fis_baseline, 0.0)
+        F_array_rescued = F_array
 
         # Calculate population sizes
         N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued, stochastic=stochastic)

@@ -172,8 +172,8 @@ def calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_s
     n_gens = len(F_array_rescued)
     N_released = np.zeros(n_gens)
 
-    # For each release cohort
-    for release_gen in range(n_gens):
+    # For each release cohort (starts at 1 — no birds released before gen 1)
+    for release_gen in range(1, n_gens):
         # Calculate how long each cohort survives (vectorized)
         future_gens = np.arange(release_gen, n_gens)
         time_since_release = future_gens - release_gen

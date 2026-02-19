@@ -4,40 +4,16 @@
 
 ---
 
-## Recent Updates (January 2026)
+## Model Updates
 
-### Critical Bug Fix: Inbreeding Coefficient Calculation (Models 3-5)
-
-**Problem:** Models 3-5 showed unrealistic 30% population crash between generation 0 and 1, even with conservation supplementation.
-
-**Root Cause:** FIS (inbreeding coefficient from genetic data, ~0.1165) was incorrectly used as F (population-wide inbreeding for population dynamics). FIS measures population genetic structure (deviation from Hardy-Weinberg), NOT inbreeding depression for viability.
-
-**Solution:** Changed models 3-5 to use drift-based F calculation like models 1-2:
-```python
-# OLD (INCORRECT): Used constant FIS (~0.1165) from genetic data
-F_array = np.array(FIS_values)  # Wrong concept!
-
-# NEW (CORRECT): Calculate F from drift with dynamic Ne
-F(t) = 1 - (1 - 1/(2*Ne(t)))^t  # Starts at 0, increases gradually
-```
-
-**Impact:**
-- Gen 0→1 drop: **30% → 0%** (now shows slight growth with supplementation!)
-- Gen 0→10 drop: **95% → 11%** (realistic gradual decline)
-- Conservation models now show biologically plausible population trajectories
-
----
-
-### Previous Model Improvements (December 2024)
-
-1. ✅ **Lethal equivalents: 6.29 → 3.14** (bird-specific, O'Grady et al. 2006)
-2. ✅ **Added genetic rescue effect** (gene flow reduces population-wide F)
-3. ✅ **Improved hybrid vigor** (released birds: 30% → 15% inbreeding penalty)
-4. ✅ **Better survival for released birds** (90% → 95%)
+### Key Model Features
+1. ✅ **Bird-specific lethal equivalents** (B = 3.14, O'Grady et al. 2006)
+2. ✅ **Genetic rescue effect** (gene flow reduces population-wide F)
+3. ✅ **Hybrid vigor modeling** (released birds: 15% inbreeding penalty)
+4. ✅ **High survival for released birds** (95% of wild rate)
 5. ✅ **Allelic diversity gene flow model** (Na can increase with supplementation)
 6. ✅ **Dynamic Ne tracking** (effective population size increases with gene flow)
-
-**Combined Impact:** Conservation scenarios (Models 3-5) now show scientifically accurate population stabilization and recovery.
+7. ✅ **Drift-based F calculation** (all models use consistent inbreeding accumulation)
 
 ---
 
@@ -130,13 +106,13 @@ N(t) = N(t-1) * λ * exp(-3.14 * F(t))
 ---
 
 ### **Model 3: Low Supplementation (+4 South African Captive Birds/Generation)**
-**What it does:** Adds 4 birds per generation from South African zoos (PAAZA) to the wild population.
+**What it does:** Adds 4 birds per generation from South African zoos to the wild population.
 
 **How it works:**
 ```python
 # Each generation:
 1. Calculate genetic metrics from current wild + captive gene pool
-2. Add 4 random PAAZA birds to population
+2. Add 4 random SA captive birds to population
 3. Apply genetic rescue effect (reduces population-wide F)
 4. Track released bird cohorts separately with hybrid vigor
 5. Apply inbreeding depression to wild-born birds
@@ -144,20 +120,20 @@ N(t) = N(t-1) * λ * exp(-3.14 * F(t))
 ```
 
 **Key improvements (Updated Model):**
-- PAAZA birds: ~70 individuals in South African zoos
+- SA captive birds: ~70 individuals in South African zoos
 - **Genetic rescue effect**: Gene flow reduces population-wide F by 50% of supplementation proportion
 - Released birds experience **15% of wild inbreeding depression** (strong hybrid vigor)
 - Released birds survive at **95% of wild rate** (disease-screened, monitored)
 - All released cohorts tracked cumulatively
 
-**Novel alleles gained:** Shows which new alleles from PAAZA are introduced to wild population.
+**Novel alleles gained:** Shows which new alleles from SA captive sources are introduced to wild population.
 
 **Use case:** Realistic genetic rescue using locally available captive birds.
 
 ---
 
 ### **Model 4: High Supplementation (+10 South African Captive Birds/Generation)**
-**What it does:** Same as Model 3, but adds 10 PAAZA birds per generation for stronger genetic rescue.
+**What it does:** Same as Model 3, but adds 10 SA captive birds per generation for stronger genetic rescue.
 
 **Effect:**
 - Faster Ho/He recovery
@@ -170,12 +146,12 @@ N(t) = N(t-1) * λ * exp(-3.14 * F(t))
 ---
 
 ### **Model 5: International Mix (+4 Mixed Birds/Generation)**
-**What it does:** Adds 4 birds per generation from a mix of South African (PAAZA), USA/Canada (AZA), and European (EAZA) zoos.
+**What it does:** Adds 4 birds per generation from a mix of South African, USA/Canada (AZA), and European (EAZA) zoos.
 
 **Captive sources:**
-- **PAAZA** (Pan-African): ~70 birds in South Africa
+- **SA Captive** (South African zoos): ~70 birds in South Africa
 - **AZA** (Association of Zoos & Aquariums): ~20 birds in USA/Canada
-- **EAZA** (European): ~55 birds in Europe
+- **EAZA** (European Association of Zoos and Aquaria): ~55 birds in Europe
 
 **Genetic advantage:** Maximum allelic diversity (combines unique alleles from all 3 sources)
 
@@ -464,7 +440,7 @@ N_total = N_wild + N_released
     "lambda": 1.0,
     "data_source": "CSV_simulation",
     "supplementation": "4 South African captive birds per generation",
-    "supplementation_source": "PAAZA (Pan-African Association of Zoos and Aquaria)",
+    "supplementation_source": "SA Captive (South African Zoos and Aquaria)",
     "novel_alleles_added": 12,
     "inbreeding_depression": "enabled (B=3.14 lethal equivalents for birds)"
   }
@@ -479,10 +455,10 @@ Returns loaded genetic data statistics:
   "data_source": "CSV",
   "populations": {
     "wild_all": {"sample_size": 199, "Ho": 0.502, "He": 0.568, "Na": 6.429},
-    "paaza": {"sample_size": 70, "Ho": 0.487, "He": 0.551, "Na": 5.8}
+    "sa_captive": {"sample_size": 70, "Ho": 0.487, "He": 0.551, "Na": 5.8}
   },
   "lost_alleles_count": 8,
-  "novel_alleles": {"paaza": 12, "aza": 5, "eaza": 18}
+  "novel_alleles": {"sa_captive": 12, "aza": 5, "eaza": 18}
 }
 ```
 
@@ -512,7 +488,7 @@ Returns loaded genetic data statistics:
 - **Limpopo province**: 48 individuals
 
 ### Captive Populations (N = 145)
-- **PAAZA** (Pan-African): ~70 birds (South Africa)
+- **SA Captive** (South African zoos): ~70 birds (South Africa)
 - **AZA** (USA/Canada): ~20 birds
 - **EAZA** (European): ~55 birds
 
@@ -536,53 +512,39 @@ Buco4, Buco11, Buco2, Buco9, GHB21, GHB19, GHB26, GHB20, Buco16, Buco18, Buco19,
 ⚠️ **Generation time = 26 years** (fixed)
 ⚠️ **Random mating** within populations
 ⚠️ **No natural migration** between wild populations
-⚠️ **No mutation** (new alleles don't appear)
+⚠️ **No mutation** (new alleles don't appear spontaneously)
 ⚠️ **Released birds integrate immediately** (no behavioral barriers)
-⚠️ **Deterministic** (single trajectory, no stochastic variation)
 ⚠️ **Genetic rescue at 50% efficiency** (gene flow reduces F proportionally)
 
-### What the model does NOT include:
-❌ Environmental stochasticity (random good/bad years)
-❌ Demographic stochasticity (random births/deaths)
-❌ Genetic drift stochasticity (random allele sampling)
+### What the model does NOT include (deterministic mode):
+❌ Environmental stochasticity (random good/bad years)*
+❌ Demographic stochasticity (random births/deaths)*
 ❌ Catastrophes (disease outbreaks, droughts)
 ❌ Allee effects (reduced fitness at low density)
+
+*Available in stochastic mode via toggle in web interface
 
 ---
 
 ## Limitations & Caveats
 
-1. **No uncertainty quantification**: Model shows single trajectory, not confidence intervals
-2. **Deterministic genetics**: Real genetic drift is stochastic (random), model uses expected values
-3. **Fixed generation time**: Assumes constant 26 years (may vary by population age structure)
-4. **Ne/N ratio implicit**: User sets Ne directly, not calculated from biology
-5. **Genetic rescue efficiency**: 50% reduction in F from gene flow is estimated, not empirically measured
-6. **Hybrid vigor assumption**: 85% reduction in inbreeding penalty for F1s may vary in practice
+1. **Uncertainty quantification**: Deterministic mode shows single trajectory; enable stochastic mode for variation
+2. **Fixed generation time**: Assumes constant 26 years (may vary by population age structure)
+3. **Ne/N ratio implicit**: User sets Ne directly, not calculated from biology
+4. **Genetic rescue efficiency**: 50% reduction in F from gene flow is estimated, not empirically measured
+5. **Hybrid vigor assumption**: 85% reduction in inbreeding penalty for F1s may vary in practice
 
-**Important Updates:**
-- **Jan 2025:** Fixed critical bug where models 3-5 used FIS instead of drift-based F (eliminated unrealistic 30% crash)
-- **Dec 2024:** Updated to bird-specific parameters (B=3.14, 95% survival, 15% inbreeding penalty, genetic rescue)
-
-**Recommendation:** Use for **comparing scenarios**, not absolute predictions. Add stochastic simulations for publication-quality uncertainty estimates.
+**Recommendation:** Use for **comparing scenarios**, not absolute predictions. Enable stochastic mode for uncertainty estimates.
 
 ---
 
 ## Future Enhancements
 
-### Planned (High Priority)
-- [ ] Stochastic simulations (100+ runs with confidence intervals)
+### Possible Additions
 - [ ] Sensitivity analysis (test different B, λ, generation time)
-- [ ] Document generation time source (why 26 years?)
-
-### Possible (Medium Priority)
-- [ ] Genetic drift stochasticity (random allele sampling)
-- [ ] Demographic stochasticity (Poisson births/deaths)
 - [ ] User-adjustable B (lethal equivalents slider)
 - [ ] Download results as CSV
-
-### Research (Low Priority)
 - [ ] Spatial structure (metapopulation dynamics)
-- [ ] Habitat quality variation
 - [ ] Climate change projections
 - [ ] Cost-benefit analysis module
 
