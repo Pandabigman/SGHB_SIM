@@ -288,12 +288,47 @@
                 </div>
             </div>
 
+            <div class="control-group">
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                    <input type="checkbox" id="mc-toggle" style="width: 20px; height: 20px; cursor: pointer;">
+                    <span style="flex: 1;">
+                        <strong>Monte Carlo Mode</strong>
+                        <span style="display: block; font-size: 0.85em; color: #666; margin-top: 3px; font-weight: normal;">
+                            Run many stochastic replicates to estimate extinction probability and confidence intervals
+                        </span>
+                    </span>
+                </label>
+                <div id="mc-options" style="display: none; margin-top: 12px; padding: 12px; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #0284c7;">
+                    <div style="margin-bottom: 10px;">
+                        <label for="mc-replicates-slider" style="font-size: 0.9em; font-weight: 500;">
+                            Number of replicates: <span id="mc-replicates-value">100</span>
+                            <span style="font-size: 0.8em; color: #666;">(more = slower but smoother distributions)</span>
+                        </label>
+                        <input type="range" id="mc-replicates-slider" min="20" max="300" value="100" step="10" style="width: 100%; margin-top: 5px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8em; color: #888;">
+                            <span>20 (fast)</span><span>100</span><span>300 (slow)</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="mc-threshold" style="font-size: 0.9em; font-weight: 500;">
+                            Quasi-extinction threshold (N &lt;):
+                        </label>
+                        <input type="number" id="mc-threshold" min="1" max="2500" value="100"
+                               style="width: 100px; margin-left: 8px; padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                        <span style="font-size: 0.8em; color: #666; margin-left: 6px;">birds</span>
+                    </div>
+                </div>
+            </div>
+
             <button id="run-btn">Run Simulation</button>
         </div>
         
         <!-- Loading State -->
         <div id="loading" class="loading hidden">
-            Running simulation
+            <span id="loading-text">Running simulation</span>
+            <div id="mc-progress-bar-wrap" style="display:none; margin-top: 10px; width: 100%; max-width: 400px; background: #e5e7eb; border-radius: 4px; height: 8px;">
+                <div id="mc-progress-bar" style="height: 8px; border-radius: 4px; background: #3b82f6; width: 0%; transition: width 0.3s ease;"></div>
+            </div>
         </div>
         
         <!-- Error Display -->
@@ -323,6 +358,10 @@
             
             <div class="chart-container">
                 <div id="chart-population"></div>
+            </div>
+
+            <div class="chart-container" id="chart-extinction-container" style="display: none;">
+                <div id="chart-extinction"></div>
             </div>
         </div>
     </div>

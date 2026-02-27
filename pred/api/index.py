@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 import os
 import sys
 import logging
@@ -12,6 +12,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from genetics import LOCI, load_and_process_genetic_data
 from models import run_model
+from models.monte_carlo import run_monte_carlo, iter_monte_carlo
 
 # Get base directory for path resolution
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -97,6 +98,101 @@ def simulate():
         import traceback
         traceback.print_exc()
         logger.error(f"Simulation error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/monte-carlo/stream", methods=["GET"])
+def monte_carlo_stream():
+    """Stream Monte Carlo results via Server-Sent Events (GET with query params)."""
+    import json
+
+    try:
+        model = int(request.args.get("model", 1))
+        Ne = int(request.args.get("Ne", 500))
+        generations = int(request.args.get("generations", 30))
+        lambda_val = float(request.args.get("lambda", 1.0))
+        n_replicates = int(request.args.get("n_replicates", 100))
+        extinction_threshold = int(request.args.get("extinction_threshold", 100))
+
+        if not 375 <= Ne <= 625:
+            return jsonify({"error": "Ne must be between 375 and 625"}), 400
+        if not 10 <= generations <= 100:
+            return jsonify({"error": "Generations must be between 10 and 100"}), 400
+        if not 0.5 <= lambda_val <= 1.5:
+            return jsonify({"error": "Lambda must be between 0.5 and 1.5"}), 400
+        if not 1 <= model <= 6:
+            return jsonify({"error": "Model must be between 1 and 6"}), 400
+        if not 10 <= n_replicates <= 500:
+            return jsonify({"error": "n_replicates must be between 10 and 500"}), 400
+        if not 1 <= extinction_threshold <= 10000:
+            return jsonify({"error": "extinction_threshold must be 1-10000"}), 400
+
+        @stream_with_context
+        def generate():
+            try:
+                for partial in iter_monte_carlo(
+                    model, n_replicates, Ne, generations, lambda_val, extinction_threshold
+                ):
+                    yield f"data: {json.dumps(partial)}\n\n"
+            except Exception as e:
+                logger.error(f"MC stream error: {e}")
+                yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+        response = Response(generate(), mimetype="text/event-stream")
+        response.headers["Cache-Control"] = "no-cache"
+        response.headers["X-Accel-Buffering"] = "no"
+        return response
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        logger.error(f"MC stream setup error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/monte-carlo", methods=["POST"])
+def monte_carlo():
+    """Run Monte Carlo simulation for specified model"""
+    try:
+        data = request.get_json()
+
+        Ne = int(data.get("Ne", 500))
+        generations = int(data.get("generations", 50))
+        lambda_val = float(data.get("lambda", 1.0))
+        model = int(data.get("model", 1))
+        n_replicates = int(data.get("n_replicates", 100))
+        extinction_threshold = int(data.get("extinction_threshold", 100))
+
+        # Validate inputs
+        if not 375 <= Ne <= 625:
+            return jsonify({"error": "Ne must be between 375 and 625"}), 400
+        if not 10 <= generations <= 100:
+            return jsonify({"error": "Generations must be between 10 and 100"}), 400
+        if not 0.5 <= lambda_val <= 1.5:
+            return jsonify({"error": "Lambda must be between 0.5 and 1.5"}), 400
+        if not 1 <= model <= 6:
+            return jsonify({"error": "Model must be between 1 and 6"}), 400
+        if not 10 <= n_replicates <= 500:
+            return jsonify({"error": "n_replicates must be between 10 and 500"}), 400
+        if not 1 <= extinction_threshold <= 10000:
+            return jsonify({"error": "extinction_threshold must be between 1 and 10000"}), 400
+
+        results = run_monte_carlo(
+            model_num=model,
+            n_replicates=n_replicates,
+            Ne=Ne,
+            generations=generations,
+            lambda_val=lambda_val,
+            genetic_data=GENETIC_DATA,
+            extinction_threshold=extinction_threshold,
+        )
+
+        return jsonify(results)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        logger.error(f"Monte Carlo error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
