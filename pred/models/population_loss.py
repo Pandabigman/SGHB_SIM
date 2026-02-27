@@ -19,7 +19,8 @@ class PopulationLossModel(BaseModel):
     model_number = 2
     model_name = "Population Loss (Kruger + Limpopo Only)"
 
-    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None):
+    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """
         Run population loss model showing impact of losing EC and KZN populations.
 
@@ -55,7 +56,10 @@ class PopulationLossModel(BaseModel):
         Na_vals = calculate_allelic_diversity(A0, Ne_scaled, t)
 
         # Calculate population size WITH inbreeding depression
-        N_vals = calculate_population_size_with_inbreeding(N0, lambda_val, F_vals, stochastic=stochastic)
+        N_vals = calculate_population_size_with_inbreeding(
+            N0, lambda_val, F_vals, stochastic=stochastic,
+            env_sigma=env_sigma, catastrophe_prob=catastrophe_prob, catastrophe_magnitude=catastrophe_magnitude
+        )
 
         return self._build_result(
             t=t,

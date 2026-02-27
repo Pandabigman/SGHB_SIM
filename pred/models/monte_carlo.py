@@ -23,8 +23,10 @@ def _run_single_replicate(args):
     Uses the analytical path (genetic_data=None) to stay fast on serverless
     environments — stochastic=True still randomises population dynamics.
     """
-    model_num, Ne, generations, lambda_val = args
-    return run_model(model_num, Ne, generations, lambda_val, stochastic=True, genetic_data=None)
+    model_num, Ne, generations, lambda_val, env_sigma, catastrophe_prob, catastrophe_magnitude = args
+    return run_model(model_num, Ne, generations, lambda_val, stochastic=True, genetic_data=None,
+                     env_sigma=env_sigma, catastrophe_prob=catastrophe_prob,
+                     catastrophe_magnitude=catastrophe_magnitude)
 
 
 def _pad(arr, n_points):
@@ -73,7 +75,8 @@ def _compute_summary(all_runs, first_result, completed, total, extinction_thresh
 
 
 def iter_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
-                     extinction_threshold=100, batch_size=5):
+                     extinction_threshold=100, batch_size=5,
+                     env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
     """
     Generator that yields partial Monte Carlo results as replicates complete.
 
@@ -86,7 +89,7 @@ def iter_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
     n_points = generations + 1
     all_runs = {m: [] for m in _METRICS}
     first_result = None
-    args = (model_num, Ne, generations, lambda_val)
+    args = (model_num, Ne, generations, lambda_val, env_sigma, catastrophe_prob, catastrophe_magnitude)
 
     def _accumulate(result):
         nonlocal first_result
@@ -122,7 +125,8 @@ def iter_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
 
 
 def run_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
-                    genetic_data=None, extinction_threshold=100):
+                    genetic_data=None, extinction_threshold=100,
+                    env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
     """
     Blocking Monte Carlo run. Returns full summary dict.
 
@@ -135,7 +139,8 @@ def run_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
     first_result = None
 
     for i in range(n_replicates):
-        result = _run_single_replicate((model_num, Ne, generations, lambda_val))
+        result = _run_single_replicate((model_num, Ne, generations, lambda_val,
+                                        env_sigma, catastrophe_prob, catastrophe_magnitude))
         if first_result is None:
             first_result = result
         for m in _METRICS:

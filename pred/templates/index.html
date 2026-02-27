@@ -282,9 +282,52 @@
                 <div id="stochastic-info" class="info-box" style="margin-top: 10px; display: none; font-size: 0.85em;">
                     <strong>⚠️ Stochastic Mode:</strong> Results will vary between runs. The model adds:
                     <ul style="margin: 5px 0 0 20px;">
-                        <li><strong>Demographic stochasticity:</strong> Random variation in births/deaths each generation</li>
-                        <li><strong>Environmental stochasticity:</strong> Random fluctuations in growth rate (σ<sub>env</sub> = 0.10)</li>
+                        <li><strong>Demographic stochasticity:</strong> Variance scaled by 26 annual steps (Normal(μ, √(26μ))), reflecting cumulative within-generation variation</li>
+                        <li><strong>Environmental stochasticity:</strong> Random fluctuations in growth rate (σ<sub>env</sub> = <span id="env-sigma-display">0.06</span> — SGHB-tuned for cooperative breeding / high adult survival)</li>
                     </ul>
+
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #cbd5e1;">
+                        <strong>Advanced Stochastic Parameters</strong>
+                        <div style="margin-top: 8px;">
+                            <label for="env-sigma-slider" style="font-weight: 500;">
+                                Environmental noise σ<sub>env</sub>: <span id="env-sigma-value">0.06</span>
+                            </label>
+                            <input type="range" id="env-sigma-slider" min="0.02" max="0.20" value="0.06" step="0.01"
+                                   style="width: 100%; margin-top: 4px;">
+                            <div style="display: flex; justify-content: space-between; color: #888; font-size: 0.8em;">
+                                <span>0.02 (low)</span><span>0.06 (SGHB default)</span><span>0.20 (high)</span>
+                            </div>
+                            <div style="color: #666; margin-top: 3px; font-size: 0.8em;">
+                                Morris &amp; Doak 2002: annual σ ≈ 0.05–0.10 for birds; generation-level 0.05–0.08 for SGHB given high adult survival (~93–96%/yr)
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 10px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500;">
+                                <input type="checkbox" id="catastrophe-toggle" style="width: 16px; height: 16px; cursor: pointer;">
+                                Enable catastrophe events (disease outbreak / drought)
+                            </label>
+                            <div id="catastrophe-options" style="display: none; margin-top: 8px; padding: 8px; background: #fff7ed; border-radius: 4px; border-left: 2px solid #f97316;">
+                                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                    <label style="font-size: 0.9em;">
+                                        Probability per generation:
+                                        <input type="number" id="catastrophe-prob" min="0.01" max="0.50" value="0.05" step="0.01"
+                                               style="width: 70px; margin-left: 4px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                                        <span style="color: #888;">(0.05 ≈ 0.2%/yr)</span>
+                                    </label>
+                                    <label style="font-size: 0.9em;">
+                                        Mortality fraction:
+                                        <input type="number" id="catastrophe-magnitude" min="0.10" max="0.90" value="0.40" step="0.05"
+                                               style="width: 60px; margin-left: 4px; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 4px;">
+                                        <span style="color: #888;">(0.40 = 40% die)</span>
+                                    </label>
+                                </div>
+                                <div style="color: #666; margin-top: 4px; font-size: 0.8em;">
+                                    e.g. Newcastle disease / HPAI: P ≈ 0.01–0.05/gen; severe drought: P ≈ 0.05–0.10/gen
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 

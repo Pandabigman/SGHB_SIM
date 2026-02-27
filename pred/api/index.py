@@ -71,6 +71,9 @@ def simulate():
         lambda_val = float(data.get("lambda", 1.0))
         model = int(data.get("model", 1))
         stochastic = bool(data.get("stochastic", False))
+        env_sigma = float(data.get("env_sigma", 0.06))
+        catastrophe_prob = float(data.get("catastrophe_prob", 0.0))
+        catastrophe_magnitude = float(data.get("catastrophe_magnitude", 0.40))
 
         # Validate inputs
         if not 375 <= Ne <= 625:
@@ -81,6 +84,12 @@ def simulate():
             return jsonify({"error": "Lambda must be between 0.5 and 1.5"}), 400
         if not 1 <= model <= 6:
             return jsonify({"error": "Model must be between 1 and 6"}), 400
+        if not 0.01 <= env_sigma <= 0.30:
+            return jsonify({"error": "env_sigma must be between 0.01 and 0.30"}), 400
+        if not 0.0 <= catastrophe_prob <= 0.50:
+            return jsonify({"error": "catastrophe_prob must be between 0.0 and 0.50"}), 400
+        if not 0.0 <= catastrophe_magnitude <= 0.99:
+            return jsonify({"error": "catastrophe_magnitude must be between 0.0 and 0.99"}), 400
 
         # Run the model using the models package
         results = run_model(
@@ -89,7 +98,10 @@ def simulate():
             generations=generations,
             lambda_val=lambda_val,
             stochastic=stochastic,
-            genetic_data=GENETIC_DATA
+            genetic_data=GENETIC_DATA,
+            env_sigma=env_sigma,
+            catastrophe_prob=catastrophe_prob,
+            catastrophe_magnitude=catastrophe_magnitude,
         )
 
         return jsonify(results)
@@ -113,6 +125,9 @@ def monte_carlo_stream():
         lambda_val = float(request.args.get("lambda", 1.0))
         n_replicates = int(request.args.get("n_replicates", 100))
         extinction_threshold = int(request.args.get("extinction_threshold", 100))
+        env_sigma = float(request.args.get("env_sigma", 0.06))
+        catastrophe_prob = float(request.args.get("catastrophe_prob", 0.0))
+        catastrophe_magnitude = float(request.args.get("catastrophe_magnitude", 0.40))
 
         if not 375 <= Ne <= 625:
             return jsonify({"error": "Ne must be between 375 and 625"}), 400
@@ -126,12 +141,20 @@ def monte_carlo_stream():
             return jsonify({"error": "n_replicates must be between 10 and 500"}), 400
         if not 1 <= extinction_threshold <= 10000:
             return jsonify({"error": "extinction_threshold must be 1-10000"}), 400
+        if not 0.01 <= env_sigma <= 0.30:
+            return jsonify({"error": "env_sigma must be between 0.01 and 0.30"}), 400
+        if not 0.0 <= catastrophe_prob <= 0.50:
+            return jsonify({"error": "catastrophe_prob must be between 0.0 and 0.50"}), 400
+        if not 0.0 <= catastrophe_magnitude <= 0.99:
+            return jsonify({"error": "catastrophe_magnitude must be between 0.0 and 0.99"}), 400
 
         @stream_with_context
         def generate():
             try:
                 for partial in iter_monte_carlo(
-                    model, n_replicates, Ne, generations, lambda_val, extinction_threshold
+                    model, n_replicates, Ne, generations, lambda_val, extinction_threshold,
+                    env_sigma=env_sigma, catastrophe_prob=catastrophe_prob,
+                    catastrophe_magnitude=catastrophe_magnitude,
                 ):
                     yield f"data: {json.dumps(partial)}\n\n"
             except Exception as e:
@@ -162,6 +185,9 @@ def monte_carlo():
         model = int(data.get("model", 1))
         n_replicates = int(data.get("n_replicates", 100))
         extinction_threshold = int(data.get("extinction_threshold", 100))
+        env_sigma = float(data.get("env_sigma", 0.06))
+        catastrophe_prob = float(data.get("catastrophe_prob", 0.0))
+        catastrophe_magnitude = float(data.get("catastrophe_magnitude", 0.40))
 
         # Validate inputs
         if not 375 <= Ne <= 625:
@@ -176,6 +202,12 @@ def monte_carlo():
             return jsonify({"error": "n_replicates must be between 10 and 500"}), 400
         if not 1 <= extinction_threshold <= 10000:
             return jsonify({"error": "extinction_threshold must be between 1 and 10000"}), 400
+        if not 0.01 <= env_sigma <= 0.30:
+            return jsonify({"error": "env_sigma must be between 0.01 and 0.30"}), 400
+        if not 0.0 <= catastrophe_prob <= 0.50:
+            return jsonify({"error": "catastrophe_prob must be between 0.0 and 0.50"}), 400
+        if not 0.0 <= catastrophe_magnitude <= 0.99:
+            return jsonify({"error": "catastrophe_magnitude must be between 0.0 and 0.99"}), 400
 
         results = run_monte_carlo(
             model_num=model,
@@ -185,6 +217,9 @@ def monte_carlo():
             lambda_val=lambda_val,
             genetic_data=GENETIC_DATA,
             extinction_threshold=extinction_threshold,
+            env_sigma=env_sigma,
+            catastrophe_prob=catastrophe_prob,
+            catastrophe_magnitude=catastrophe_magnitude,
         )
 
         return jsonify(results)

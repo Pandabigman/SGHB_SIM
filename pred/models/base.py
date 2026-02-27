@@ -44,24 +44,33 @@ def calculate_allelic_diversity(A0, Ne, t):
     return np.maximum(At, 2.0)
 
 
-def calculate_allelic_diversity_with_geneflow(A0, Ne, t, novel_alleles_per_gen=0):
+def calculate_allelic_diversity_with_geneflow(A0, Ne, t, novel_alleles_per_gen=0,
+                                              max_novel_alleles=None):
     """
     Allelic diversity accounting for both drift loss AND gene flow gain
 
     This model combines:
     1. Drift-driven loss of initial alleles: A0 * exp(-t/(4*Ne))
     2. Gain from gene flow: Sum of novel alleles added each generation,
-       adjusted for subsequent drift loss
+       adjusted for subsequent drift loss, capped at a finite pool
 
     Args:
         A0: Initial mean alleles per locus
         Ne: Effective population size (can vary with gene flow)
         t: Time in generations (scalar or array)
         novel_alleles_per_gen: Mean novel alleles added per locus per generation
+        max_novel_alleles: Hard ceiling on total novel alleles that can ever be
+            introduced (the finite captive allele pool). Defaults to 2.7 — the
+            empirical surplus of the full PAAZA+AZA+EAZA pool over wild:
+            combined Na 9.07 − wild Na 6.43 = 2.64, rounded up to 2.7.
+            Pass a higher value for international mixes with more distinct alleles.
 
     Returns:
         Expected allele count (scalar or array matching t)
     """
+    if max_novel_alleles is None:
+        max_novel_alleles = 2.7  # SGHB global captive pool surplus over wild
+
     # Handle both scalar and array inputs
     is_scalar = np.isscalar(t)
     t_array = np.atleast_1d(t)
@@ -83,6 +92,9 @@ def calculate_allelic_diversity_with_geneflow(A0, Ne, t, novel_alleles_per_gen=0
                 alleles_retained = novel_alleles_per_gen * np.exp(-time_since_addition / (4 * Ne))
                 allele_gain += alleles_retained
 
+        # Cap at the finite pool of novel alleles available in the captive source
+        allele_gain = min(allele_gain, max_novel_alleles)
+
         # Total alleles = original (after drift) + novel (after drift)
         At_total = At_drift + allele_gain
 
@@ -98,7 +110,8 @@ def calculate_population_size(N0, lambda_val, t):
 
 
 def calculate_population_size_with_inbreeding(
-    N0, lambda_val, F_array, lethal_equivalents=LETHAL_EQUIVALENTS_BIRDS, stochastic=False, env_sigma=0.10
+    N0, lambda_val, F_array, lethal_equivalents=LETHAL_EQUIVALENTS_BIRDS, stochastic=False,
+    env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40
 ):
     """
     Population size with inbreeding depression
@@ -115,7 +128,14 @@ def calculate_population_size_with_inbreeding(
         F_array: Array of inbreeding coefficients over time
         lethal_equivalents: Number of lethal equivalents (default 3.14)
         stochastic: If True, add demographic and environmental stochasticity
-        env_sigma: Environmental stochasticity standard deviation (default 0.10)
+        env_sigma: Environmental stochasticity std dev per generation (default 0.06).
+            SGHB-tuned: cooperative breeding + high adult survival (~93-96%/yr) buffers
+            generation-level variance (Morris & Doak 2002; Reed et al. 2002 report
+            annual sigma_e ~0.05-0.10 for birds; generation-level ~0.05-0.08 for SGHB).
+        catastrophe_prob: Per-generation probability of a catastrophic event (default 0.0).
+            Models disease outbreaks, severe drought, etc. Set >0 to enable.
+        catastrophe_magnitude: Fraction of population killed in a catastrophe (default 0.40).
+            e.g. 0.40 = 40% of individuals die in the event.
 
     Returns: Array of population sizes incorporating inbreeding depression
     """
@@ -131,26 +151,27 @@ def calculate_population_size_with_inbreeding(
 
         if stochastic:
             # ENVIRONMENTAL STOCHASTICITY: Random variation in growth rate
+            # sigma=0.06 reflects SGHB's buffered life history; high-end would be ~0.10
             lambda_stochastic = lambda_adjusted + np.random.normal(0, env_sigma)
             # Ensure lambda stays positive
             lambda_stochastic = max(lambda_stochastic, 0.5)
 
-            # DEMOGRAPHIC STOCHASTICITY: Random variation in actual population change
+            # DEMOGRAPHIC STOCHASTICITY: variance scaled by generation length (26 yrs)
+            # A single per-generation draw underestimates cumulative annual variance by ~sqrt(26).
+            # Normal(mu, sqrt(26*mu)) approximates a Galton-Watson process over 26 annual steps.
             expected_N = N[t - 1] * lambda_stochastic
+            demo_sigma = np.sqrt(26 * max(expected_N, 0))
+            N[t] = max(0, int(round(np.random.normal(expected_N, demo_sigma))))
 
-            # Add Poisson variation for discrete individuals
-            if expected_N > 1000:
-                # Normal approximation: N ~ Normal(expected, sqrt(expected))
-                N[t] = np.random.normal(expected_N, np.sqrt(expected_N))
-            else:
-                # Poisson for smaller populations
-                N[t] = np.random.poisson(expected_N)
+            # CATASTROPHE: stochastic mass-mortality event (disease, drought, poisoning)
+            if catastrophe_prob > 0 and np.random.random() < catastrophe_prob:
+                N[t] = N[t] * (1 - catastrophe_magnitude)
         else:
             # Deterministic calculation
             N[t] = N[t - 1] * lambda_adjusted
 
-        # Prevent population from going extinct (minimum viable)
-        N[t] = max(N[t], 10)
+        # Allow true extinction (N=0); do not rescue with artificial floor
+        N[t] = max(N[t], 0)
 
     return N
 
@@ -231,7 +252,8 @@ class BaseModel(ABC):
     model_name: str = "Base Model"
 
     @abstractmethod
-    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None):
+    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """
         Run the simulation model.
 
@@ -241,6 +263,9 @@ class BaseModel(ABC):
             lambda_val: Population growth rate
             stochastic: Whether to include stochasticity
             genetic_data: Loaded genetic data (optional)
+            env_sigma: Environmental stochasticity std dev per generation
+            catastrophe_prob: Per-generation probability of catastrophic event
+            catastrophe_magnitude: Fraction of population killed in catastrophe
 
         Returns: Dict with simulation results
         """

@@ -23,7 +23,8 @@ class HighSupplementationModel(BaseModel):
     model_number = 4
     model_name = "High Supplementation (+10 SA Captive/gen)"
 
-    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None):
+    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """
         Run high supplementation model with dynamic captive breeding.
 
@@ -32,11 +33,14 @@ class HighSupplementationModel(BaseModel):
         birds_per_gen = 10
 
         if genetic_data:
-            return self._run_with_csv_data(Ne, generations, lambda_val, stochastic, genetic_data, birds_per_gen)
+            return self._run_with_csv_data(Ne, generations, lambda_val, stochastic, genetic_data, birds_per_gen,
+                                           env_sigma, catastrophe_prob, catastrophe_magnitude)
         else:
-            return self._run_generic(Ne, generations, lambda_val, stochastic, birds_per_gen)
+            return self._run_generic(Ne, generations, lambda_val, stochastic, birds_per_gen,
+                                     env_sigma, catastrophe_prob, catastrophe_magnitude)
 
-    def _run_with_csv_data(self, Ne, generations, lambda_val, stochastic, genetic_data, birds_per_gen):
+    def _run_with_csv_data(self, Ne, generations, lambda_val, stochastic, genetic_data, birds_per_gen,
+                           env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """Run model using real CSV data with dynamic breeding simulation."""
         wild_df = genetic_data["dataframes"]["wild_all"]
         paaza_df = genetic_data["dataframes"]["paaza"]
@@ -88,7 +92,10 @@ class HighSupplementationModel(BaseModel):
         F_array_rescued = F_array
 
         # Calculate population sizes
-        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued, stochastic=stochastic)
+        N_wild = calculate_population_size_with_inbreeding(
+            N0, lambda_val, F_array_rescued, stochastic=stochastic,
+            env_sigma=env_sigma, catastrophe_prob=catastrophe_prob, catastrophe_magnitude=catastrophe_magnitude
+        )
         N_released = calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_survival_multiplier)
         N = N_wild + N_released
 
@@ -116,7 +123,8 @@ class HighSupplementationModel(BaseModel):
             captive_F_mean=captive_F_mean,
         )
 
-    def _run_generic(self, Ne, generations, lambda_val, stochastic, birds_per_gen):
+    def _run_generic(self, Ne, generations, lambda_val, stochastic, birds_per_gen,
+                     env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """Run generic model when CSV data not available."""
         H0 = 0.502
         He0 = 0.568
@@ -153,7 +161,10 @@ class HighSupplementationModel(BaseModel):
         F_array_rescued = calculate_genetic_rescue_effect(F_array, birds_per_gen, N0)
 
         captive_survival_multiplier = 0.95
-        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued, stochastic=stochastic)
+        N_wild = calculate_population_size_with_inbreeding(
+            N0, lambda_val, F_array_rescued, stochastic=stochastic,
+            env_sigma=env_sigma, catastrophe_prob=catastrophe_prob, catastrophe_magnitude=catastrophe_magnitude
+        )
         N_released = calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_survival_multiplier)
         N_vals = N_wild + N_released
 

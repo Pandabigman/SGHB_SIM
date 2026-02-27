@@ -43,7 +43,8 @@ MODEL_REGISTRY = {
 }
 
 
-def run_model(model_num, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None):
+def run_model(model_num, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
+              env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
     """
     Run the specified model.
 
@@ -54,12 +55,17 @@ def run_model(model_num, Ne, generations, lambda_val=1.0, stochastic=False, gene
         lambda_val: Population growth rate
         stochastic: Whether to include stochasticity
         genetic_data: Loaded genetic data (optional)
+        env_sigma: Environmental stochasticity std dev per generation (default 0.06)
+        catastrophe_prob: Per-generation probability of catastrophic event (default 0.0)
+        catastrophe_magnitude: Fraction of population killed in catastrophe (default 0.40)
 
     Returns: Dict with simulation results
     """
     if model_num not in MODEL_REGISTRY:
         raise ValueError(f"Model {model_num} not found. Available models: {list(MODEL_REGISTRY.keys())}")
-    return MODEL_REGISTRY[model_num].run(Ne, generations, lambda_val, stochastic, genetic_data)
+    return MODEL_REGISTRY[model_num].run(Ne, generations, lambda_val, stochastic, genetic_data,
+                                         env_sigma=env_sigma, catastrophe_prob=catastrophe_prob,
+                                         catastrophe_magnitude=catastrophe_magnitude)
 
 
 def get_model(model_num):

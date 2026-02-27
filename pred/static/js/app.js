@@ -14,6 +14,10 @@ const state = {
     monteCarlo: false,
     mcReplicates: 100,
     extinctionThreshold: 100,
+    envSigma: 0.06,
+    catastropheEnabled: false,
+    catastropheProb: 0.05,
+    catastropheMagnitude: 0.40,
     results: null,
     isLoading: false
 };
@@ -122,6 +126,48 @@ function initializeControls() {
         }
     });
 
+    // Environmental sigma slider
+    const envSigmaSlider = document.getElementById('env-sigma-slider');
+    const envSigmaValue = document.getElementById('env-sigma-value');
+
+    if (envSigmaSlider) {
+        envSigmaSlider.addEventListener('input', (e) => {
+            state.envSigma = parseFloat(e.target.value);
+            envSigmaValue.textContent = state.envSigma.toFixed(2);
+            const displayEl = document.getElementById('env-sigma-display');
+            if (displayEl) displayEl.textContent = state.envSigma.toFixed(2);
+        });
+    }
+
+    // Catastrophe toggle
+    const catastropheToggle = document.getElementById('catastrophe-toggle');
+    const catastropheOptions = document.getElementById('catastrophe-options');
+
+    if (catastropheToggle) {
+        catastropheToggle.addEventListener('change', (e) => {
+            state.catastropheEnabled = e.target.checked;
+            catastropheOptions.style.display = e.target.checked ? 'block' : 'none';
+        });
+    }
+
+    // Catastrophe probability input
+    const catastropheProbInput = document.getElementById('catastrophe-prob');
+    if (catastropheProbInput) {
+        catastropheProbInput.addEventListener('change', (e) => {
+            const val = parseFloat(e.target.value);
+            if (val >= 0 && val <= 0.50) state.catastropheProb = val;
+        });
+    }
+
+    // Catastrophe magnitude input
+    const catastropheMagInput = document.getElementById('catastrophe-magnitude');
+    if (catastropheMagInput) {
+        catastropheMagInput.addEventListener('change', (e) => {
+            const val = parseFloat(e.target.value);
+            if (val >= 0.01 && val <= 0.99) state.catastropheMagnitude = val;
+        });
+    }
+
     // Run button
     document.getElementById('run-btn').addEventListener('click', runSimulation);
 }
@@ -197,7 +243,10 @@ async function runSimulation() {
                 generations: state.generations,
                 lambda: state.lambda,
                 model: state.currentModel,
-                stochastic: state.stochastic
+                stochastic: state.stochastic,
+                env_sigma: state.envSigma,
+                catastrophe_prob: state.catastropheEnabled ? state.catastropheProb : 0.0,
+                catastrophe_magnitude: state.catastropheMagnitude,
             })
         });
 
@@ -224,6 +273,9 @@ function runMCStream() {
         lambda: state.lambda,
         n_replicates: state.mcReplicates,
         extinction_threshold: state.extinctionThreshold,
+        env_sigma: state.envSigma,
+        catastrophe_prob: state.catastropheEnabled ? state.catastropheProb : 0.0,
+        catastrophe_magnitude: state.catastropheMagnitude,
     });
 
     setMCProgress(0, state.mcReplicates);

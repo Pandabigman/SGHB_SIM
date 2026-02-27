@@ -23,7 +23,8 @@ class MixedSASourceModel(BaseModel):
     model_number = 6
     model_name = "Mixed SA Source (+6 Captive +2 KZN +2 EC/gen)"
 
-    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None):
+    def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """
         Run mixed SA source model.
 
@@ -33,11 +34,14 @@ class MixedSASourceModel(BaseModel):
         - 2 birds from Eastern Cape wild (translocated)
         """
         if genetic_data:
-            return self._run_with_csv_data(Ne, generations, lambda_val, stochastic, genetic_data)
+            return self._run_with_csv_data(Ne, generations, lambda_val, stochastic, genetic_data,
+                                           env_sigma, catastrophe_prob, catastrophe_magnitude)
         else:
-            return self._run_generic(Ne, generations, lambda_val, stochastic)
+            return self._run_generic(Ne, generations, lambda_val, stochastic,
+                                     env_sigma, catastrophe_prob, catastrophe_magnitude)
 
-    def _run_with_csv_data(self, Ne, generations, lambda_val, stochastic, genetic_data):
+    def _run_with_csv_data(self, Ne, generations, lambda_val, stochastic, genetic_data,
+                           env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """Run model using real CSV data."""
         wild_df = genetic_data["dataframes"]["wild_all"]
         paaza_df = genetic_data["dataframes"]["paaza"]
@@ -112,7 +116,10 @@ class MixedSASourceModel(BaseModel):
         F_array_rescued = F_array
 
         # Calculate population sizes
-        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued, stochastic=stochastic)
+        N_wild = calculate_population_size_with_inbreeding(
+            N0, lambda_val, F_array_rescued, stochastic=stochastic,
+            env_sigma=env_sigma, catastrophe_prob=catastrophe_prob, catastrophe_magnitude=catastrophe_magnitude
+        )
         N_released = calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_survival_multiplier)
         N = N_wild + N_released
 
@@ -146,7 +153,8 @@ class MixedSASourceModel(BaseModel):
             ec_F_mean=ec_F_mean,
         )
 
-    def _run_generic(self, Ne, generations, lambda_val, stochastic):
+    def _run_generic(self, Ne, generations, lambda_val, stochastic,
+                     env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
         """Run generic model when CSV data not available."""
         H0 = 0.502
         He0 = 0.568
@@ -184,7 +192,10 @@ class MixedSASourceModel(BaseModel):
         F_array_rescued = calculate_genetic_rescue_effect(F_array, birds_per_gen, N0)
 
         captive_survival_multiplier = 0.95
-        N_wild = calculate_population_size_with_inbreeding(N0, lambda_val, F_array_rescued, stochastic=stochastic)
+        N_wild = calculate_population_size_with_inbreeding(
+            N0, lambda_val, F_array_rescued, stochastic=stochastic,
+            env_sigma=env_sigma, catastrophe_prob=catastrophe_prob, catastrophe_magnitude=catastrophe_magnitude
+        )
         N_released = calculate_released_birds_optimized(birds_per_gen, F_array_rescued, captive_survival_multiplier)
         N_vals = N_wild + N_released
 
