@@ -14,6 +14,25 @@ from genetics import (
 from utils.cache import get_cache_key, get_cached_simulation
 
 
+def compute_max_novel_alleles(novel_alleles_dict, sources):
+    """
+    Compute mean novel alleles per locus from actual CSV data (union of specified sources).
+
+    Args:
+        novel_alleles_dict: genetic_data["novel_alleles"] — dict of {source: {locus: set(alleles)}}
+        sources: list of source keys, e.g. ["paaza"] or ["paaza", "aza", "eaza"]
+
+    Returns:
+        Mean novel alleles per locus (float). Falls back to 2.7 if data absent.
+    """
+    combined = {}
+    for src in sources:
+        for locus, alleles in novel_alleles_dict.get(src, {}).items():
+            combined.setdefault(locus, set()).update(alleles)
+    total = sum(len(v) for v in combined.values())
+    return total / len(LOCI) if total > 0 else 2.7
+
+
 # Biological constants
 LETHAL_EQUIVALENTS_BIRDS = 3.14  # O'Grady et al. 2006
 GENERATION_TIME_YEARS = 26
@@ -253,7 +272,8 @@ class BaseModel(ABC):
 
     @abstractmethod
     def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
-            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40,
+            max_novel_alleles=None):
         """
         Run the simulation model.
 
@@ -266,6 +286,8 @@ class BaseModel(ABC):
             env_sigma: Environmental stochasticity std dev per generation
             catastrophe_prob: Per-generation probability of catastrophic event
             catastrophe_magnitude: Fraction of population killed in catastrophe
+            max_novel_alleles: Per-model novel allele ceiling (models 3-6 only);
+                ignored by models 1-2.
 
         Returns: Dict with simulation results
         """

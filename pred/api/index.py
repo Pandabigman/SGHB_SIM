@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from genetics import LOCI, load_and_process_genetic_data
-from models import run_model
+from models import run_model, compute_max_novel_alleles
 from models.monte_carlo import run_monte_carlo, iter_monte_carlo
 
 # Get base directory for path resolution
@@ -49,6 +49,26 @@ def initialize_genetic_data():
     else:
         logger.warning("CSV files not found. Using default values.")
         GENETIC_DATA = None
+
+
+def _mc_max_novel(model_num):
+    """
+    Return the per-model novel allele ceiling for Monte Carlo replicates.
+
+    Computed from the loaded CSV data so the generic analytical Na formula
+    uses the correct empirical cap rather than the hardcoded 2.7 default.
+    Models 1-2 have no supplementation so return None (ignored by those models).
+    """
+    if GENETIC_DATA is None:
+        return None
+    novel = GENETIC_DATA["novel_alleles"]
+    if model_num in (3, 4):
+        return compute_max_novel_alleles(novel, ["paaza"])
+    elif model_num == 5:
+        return compute_max_novel_alleles(novel, ["paaza", "aza", "eaza"])
+    elif model_num == 6:
+        return compute_max_novel_alleles(novel, ["paaza"])
+    return None  # models 1-2
 
 
 # API ROUTES
@@ -155,6 +175,7 @@ def monte_carlo_stream():
                     model, n_replicates, Ne, generations, lambda_val, extinction_threshold,
                     env_sigma=env_sigma, catastrophe_prob=catastrophe_prob,
                     catastrophe_magnitude=catastrophe_magnitude,
+                    max_novel_alleles=_mc_max_novel(model),
                 ):
                     yield f"data: {json.dumps(partial)}\n\n"
             except Exception as e:
@@ -220,6 +241,7 @@ def monte_carlo():
             env_sigma=env_sigma,
             catastrophe_prob=catastrophe_prob,
             catastrophe_magnitude=catastrophe_magnitude,
+            max_novel_alleles=_mc_max_novel(model),
         )
 
         return jsonify(results)

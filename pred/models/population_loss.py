@@ -20,7 +20,8 @@ class PopulationLossModel(BaseModel):
     model_name = "Population Loss (Kruger + Limpopo Only)"
 
     def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
-            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40,
+            max_novel_alleles=None):
         """
         Run population loss model showing impact of losing EC and KZN populations.
 

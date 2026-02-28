@@ -22,11 +22,18 @@ def _run_single_replicate(args):
 
     Uses the analytical path (genetic_data=None) to stay fast on serverless
     environments — stochastic=True still randomises population dynamics.
+
+    args: (model_num, Ne, generations, lambda_val, env_sigma,
+           catastrophe_prob, catastrophe_magnitude, max_novel_alleles)
+    max_novel_alleles is pre-computed from CSV data by the caller so that
+    the generic analytical Na formula uses the correct per-model ceiling
+    rather than the hardcoded default.
     """
-    model_num, Ne, generations, lambda_val, env_sigma, catastrophe_prob, catastrophe_magnitude = args
+    model_num, Ne, generations, lambda_val, env_sigma, catastrophe_prob, catastrophe_magnitude, max_novel_alleles = args
     return run_model(model_num, Ne, generations, lambda_val, stochastic=True, genetic_data=None,
                      env_sigma=env_sigma, catastrophe_prob=catastrophe_prob,
-                     catastrophe_magnitude=catastrophe_magnitude)
+                     catastrophe_magnitude=catastrophe_magnitude,
+                     max_novel_alleles=max_novel_alleles)
 
 
 def _pad(arr, n_points):
@@ -76,7 +83,8 @@ def _compute_summary(all_runs, first_result, completed, total, extinction_thresh
 
 def iter_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
                      extinction_threshold=100, batch_size=5,
-                     env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
+                     env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40,
+                     max_novel_alleles=None):
     """
     Generator that yields partial Monte Carlo results as replicates complete.
 
@@ -85,11 +93,16 @@ def iter_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
 
     Each yielded dict has the same shape as the final run_monte_carlo() result,
     with an added 'completed' / 'total' / 'type' key for progress tracking.
+
+    max_novel_alleles: per-model novel allele ceiling pre-computed from CSV data by
+        the API layer (api/index.py). Passed through to _run_generic() so that Na
+        uses the correct empirical cap instead of the hardcoded 2.7 default.
     """
     n_points = generations + 1
     all_runs = {m: [] for m in _METRICS}
     first_result = None
-    args = (model_num, Ne, generations, lambda_val, env_sigma, catastrophe_prob, catastrophe_magnitude)
+    args = (model_num, Ne, generations, lambda_val, env_sigma, catastrophe_prob,
+            catastrophe_magnitude, max_novel_alleles)
 
     def _accumulate(result):
         nonlocal first_result
@@ -126,13 +139,16 @@ def iter_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
 
 def run_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
                     genetic_data=None, extinction_threshold=100,
-                    env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
+                    env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40,
+                    max_novel_alleles=None):
     """
     Blocking Monte Carlo run. Returns full summary dict.
 
     NOTE: genetic_data is accepted for API compatibility but ignored —
     the streaming path always uses the analytical model for speed.
     For a fully empirical MC run use iter_monte_carlo() via the SSE endpoint.
+
+    max_novel_alleles: per-model novel allele ceiling pre-computed from CSV data.
     """
     n_points = generations + 1
     all_runs = {m: np.zeros((n_replicates, n_points)) for m in _METRICS}
@@ -140,7 +156,8 @@ def run_monte_carlo(model_num, n_replicates, Ne, generations, lambda_val,
 
     for i in range(n_replicates):
         result = _run_single_replicate((model_num, Ne, generations, lambda_val,
-                                        env_sigma, catastrophe_prob, catastrophe_magnitude))
+                                        env_sigma, catastrophe_prob, catastrophe_magnitude,
+                                        max_novel_alleles))
         if first_result is None:
             first_result = result
         for m in _METRICS:

@@ -20,7 +20,8 @@ class BaselineModel(BaseModel):
     model_name = "Baseline (All Wild Populations)"
 
     def run(self, Ne, generations, lambda_val=1.0, stochastic=False, genetic_data=None,
-            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40):
+            env_sigma=0.06, catastrophe_prob=0.0, catastrophe_magnitude=0.40,
+            max_novel_alleles=None):
         """
         Run baseline model using real CSV data if available.
 
