@@ -373,10 +373,12 @@ function hideError() {
 // RESULTS DISPLAY
 
 function displayResults(results) {
-    document.getElementById('results').classList.remove('hidden');
+    const resultsEl = document.getElementById('results');
+    resultsEl.classList.remove('hidden');
     document.getElementById('chart-extinction-container').style.display = 'none';
 
     displayStatistics(results);
+    void resultsEl.offsetHeight;
     plotCharts(results);
 }
 
@@ -540,7 +542,7 @@ function plotHeterozygosity(results) {
         hovermode: 'closest'
     };
     
-    Plotly.react('chart-heterozygosity', [trace], layout, {responsive: true});
+    Plotly.newPlot('chart-heterozygosity', [trace], layout, {responsive: true});
 }
 
 function plotInbreeding(results) {
@@ -593,7 +595,7 @@ function plotInbreeding(results) {
         }]
     };
     
-    Plotly.react('chart-inbreeding', [trace], layout, {responsive: true});
+    Plotly.newPlot('chart-inbreeding', [trace], layout, {responsive: true});
 }
 
 function plotAlleles(results) {
@@ -626,7 +628,7 @@ function plotAlleles(results) {
         paper_bgcolor: '#ffffff'
     };
     
-    Plotly.react('chart-alleles', [trace], layout, {responsive: true});
+    Plotly.newPlot('chart-alleles', [trace], layout, {responsive: true});
 }
 
 function plotPopulation(results) {
@@ -658,7 +660,7 @@ function plotPopulation(results) {
         paper_bgcolor: '#ffffff'
     };
 
-    Plotly.react('chart-population', [trace], layout, {responsive: true});
+    Plotly.newPlot('chart-population', [trace], layout, {responsive: true});
 }
 
 // MONTE CARLO CHART HELPERS
