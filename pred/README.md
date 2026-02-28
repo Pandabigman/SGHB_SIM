@@ -180,7 +180,7 @@ All charts are Plotly.js 2.27.0 interactive line plots.
 ## Data Sources
 
 - **Wild** (`blue.csv`): 199 individuals — Eastern Cape (48), Kruger NP (52), KwaZulu-Natal (51), Limpopo (48)
-- **Captive** (`red.csv`): 145 individuals — PAAZA/SA zoos (~90), AZA/USA-Canada (~28), EAZA/Europe (~27)
+- **Captive** (`red.csv`): 145 individuals — SA zoos (~90), AZA/USA-Canada (~28), EAZA/Europe (~27)
 - **Loci (14):** Buco2/4/9/11/16/18/19/21/24/25, GHB19/20/21/26
 
 ---
